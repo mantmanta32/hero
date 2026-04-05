@@ -71,9 +71,14 @@
         radial-gradient(ellipse at 50% 50%, rgba(168,85,247,.07) 0%, transparent 60%);
     }
 
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--purple-l); border-radius: 4px; }
+    /* PC'de scrollbar daha belirgin */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--purple-l); border-radius: 4px; border: 2px solid var(--bg2); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--purple); }
+    @media (max-width: 768px) {
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
+    }
 
     /* ---- APP SHELL ---- */
     .app {
@@ -87,8 +92,8 @@
     .topbar {
       background: var(--bg2);
       border-bottom: 1.5px solid var(--border);
-      padding: 6px 10px;
-      padding-top: calc(6px + var(--safe-t));
+      padding: 3px 10px;
+      padding-top: calc(3px + var(--safe-t));
       display: flex; align-items: center; gap: 8px;
       flex-shrink: 0; z-index: 20;
     }
@@ -109,7 +114,7 @@
     }
     @keyframes blink { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.72)} }
 
-    /* ---- STATS BAR (tek satır, kompakt) ---- */
+    /* ---- STATS BAR (ultra kompakt) ---- */
     .stats-wrap {
       display: flex; gap: 0;
       background: var(--bg2);
@@ -118,27 +123,27 @@
     }
     .stat-card {
       flex: 1; display: flex; flex-direction: column; align-items: center;
-      padding: 5px 2px;
+      padding: 3px 2px;
       border-right: 1px solid var(--border);
     }
     .stat-card:last-child { border-right: none; }
-    .stat-emoji { font-size: 1rem; line-height: 1; display: block; }
+    .stat-emoji { display: none; } /* emoji kaldır — yer kazanır */
     .stat-lbl {
-      font-size: .72rem; font-weight: 600; color: var(--text3);
+      font-size: .6rem; font-weight: 600; color: var(--text3);
       text-transform: uppercase; letter-spacing: .2px; line-height: 1.1;
     }
-    .stat-num { font-size: 1rem; font-weight: 700; line-height: 1.2; }
+    .stat-num { font-size: .9rem; font-weight: 700; line-height: 1.2; }
     .stat-num.vol   { color: var(--purple); }
     .stat-num.lon   { color: var(--long); }
     .stat-num.sho   { color: var(--short); }
     .stat-num.wha   { color: var(--whale); }
 
-    /* ---- RATIO BAR ---- */
-    .ratio-wrap { padding: 4px 10px 3px; background: var(--bg2); border-bottom: 1.5px solid var(--border); flex-shrink: 0; }
+    /* ---- RATIO BAR — ultra ince ---- */
+    .ratio-wrap { padding: 2px 10px; background: var(--bg2); border-bottom: 1.5px solid var(--border); flex-shrink: 0; }
     .ratio-track {
-      height: 11px; background: var(--short-l);
+      height: 5px; background: var(--short-l);
       border-radius: 99px; overflow: hidden;
-      border: 1.5px solid rgba(16,185,129,.2);
+      border: none;
     }
     .ratio-fill {
       height: 100%; width: 50%;
@@ -146,20 +151,10 @@
       border-radius: 99px;
       transition: width .5s cubic-bezier(.2,.9,.4,1.1);
     }
-    .ratio-labels {
-      display: flex; justify-content: space-between;
-      font-size: .75rem; font-weight: 700; color: var(--text3); margin-top: 3px;
-    }
+    .ratio-labels { display: none; } /* etiketleri gizle */
 
-    /* ---- WHALE BANNER ---- */
-    .whale-banner {
-      display: none; margin: 4px 8px 0;
-      background: linear-gradient(90deg, var(--whale-l), #fff9e6);
-      border: 2px solid var(--whale); border-radius: var(--r-sm);
-      padding: 7px 12px; align-items: center; gap: 8px;
-      flex-shrink: 0;
-    }
-    .whale-banner.show { display: flex; }
+    /* ---- WHALE BANNER — stats bar'a taşındı, gizle ---- */
+    .whale-banner { display: none !important; }
 
     /* ---- PAGES ---- */
     .pages { flex: 1; overflow: hidden; position: relative; min-height: 0; }
@@ -181,7 +176,13 @@
       overscroll-behavior-y: contain;
       padding-bottom: 8px;
     }
-    .page-scroll::-webkit-scrollbar { width: 4px; }
+    .page-scroll::-webkit-scrollbar { width: 8px; }
+    .page-scroll::-webkit-scrollbar-track { background: var(--bg2); }
+    .page-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .page-scroll::-webkit-scrollbar-thumb:hover { background: var(--purple); }
+    @media (max-width: 768px) {
+      .page-scroll::-webkit-scrollbar { width: 4px; }
+    }
 
     /* ---- FILTER CHIP GROUP (filtre sayfasında) ---- */
     .filter-chip-group {
@@ -253,8 +254,8 @@
     .feed-hdr {
       display: grid;
       grid-template-columns: 1fr auto auto;
-      padding: 5px 12px;
-      font-size: .7rem; font-weight: 700; text-transform: uppercase;
+      padding: 3px 12px;
+      font-size: .65rem; font-weight: 700; text-transform: uppercase;
       color: var(--text3); letter-spacing: .3px;
       background: var(--bg2); border-bottom: 1.5px solid var(--border);
       flex-shrink: 0;
@@ -262,17 +263,17 @@
     .feed-hdr span:nth-child(2) { text-align: right; padding-right: 8px; }
     .feed-hdr span:nth-child(3) { text-align: right; min-width: 82px; }
 
-    /* ---- LIQ ROW ---- */
+    /* ---- LIQ ROW — kompakt ---- */
     .liq-row {
       display: grid;
-      grid-template-columns: 44px 1fr auto auto;
+      grid-template-columns: 32px 1fr auto auto;
       align-items: center;
-      margin: 4px 8px;
-      padding: 10px 8px;
+      margin: 2px 6px;
+      padding: 5px 6px;
       background: white;
-      border-radius: var(--r);
-      border-left: 5px solid;
-      box-shadow: 0 2px 10px rgba(168,85,247,.08);
+      border-radius: var(--r-sm);
+      border-left: 4px solid;
+      box-shadow: 0 1px 6px rgba(168,85,247,.07);
       transition: transform .12s;
       cursor: pointer;
     }
@@ -280,27 +281,27 @@
 
     .liq-row.long-liq {
       border-left-color: var(--long);
-      background: linear-gradient(90deg, rgba(244,63,94,.05), white 35%);
+      background: linear-gradient(90deg, rgba(244,63,94,.04), white 30%);
     }
     .liq-row.short-liq {
       border-left-color: var(--short);
-      background: linear-gradient(90deg, rgba(16,185,129,.05), white 35%);
+      background: linear-gradient(90deg, rgba(16,185,129,.04), white 30%);
     }
     .liq-row.whale-row {
       border-left-color: var(--whale);
-      box-shadow: 0 4px 20px rgba(245,158,11,.22);
+      box-shadow: 0 2px 12px rgba(245,158,11,.2);
       animation: whalePop .65s ease-out;
     }
     @keyframes whalePop {
-      0%  { transform: scale(1.04); box-shadow: 0 0 30px rgba(245,158,11,.5); }
-      100%{ transform: scale(1);    box-shadow: 0 4px 20px rgba(245,158,11,.22); }
+      0%  { transform: scale(1.03); box-shadow: 0 0 20px rgba(245,158,11,.4); }
+      100%{ transform: scale(1);    box-shadow: 0 2px 12px rgba(245,158,11,.2); }
     }
 
-    /* col 1 */
+    /* col 1 — avatar küçük */
     .coin-avatar {
-      width: 40px; height: 40px; border-radius: 12px;
+      width: 28px; height: 28px; border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 1.35rem;
+      font-size: .95rem;
     }
     .coin-avatar.la { background: var(--long-l); }
     .coin-avatar.sa { background: var(--short-l); }
@@ -309,57 +310,58 @@
     /* col 2 */
     .sym-col { min-width: 0; }
     .sym-name {
-      font-size: .95rem; font-weight: 700; color: var(--text);
+      font-size: .82rem; font-weight: 700; color: var(--text);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      line-height: 1.2;
     }
     .sym-perp {
-      font-size: .58rem; background: var(--purple-l); color: var(--purple);
-      padding: 1px 5px; border-radius: 5px; margin-left: 4px;
+      font-size: .52rem; background: var(--purple-l); color: var(--purple);
+      padding: 0px 4px; border-radius: 4px; margin-left: 3px;
       font-weight: 700; vertical-align: middle; white-space: nowrap;
     }
-    .sym-side { font-size: .82rem; font-weight: 700; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sym-side { font-size: .72rem; font-weight: 700; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .whale-tag {
       display: inline-block;
       background: var(--whale-l); color: var(--whale);
-      font-size: .62rem; font-weight: 700;
-      padding: 1px 6px; border-radius: 20px; margin-left: 3px; vertical-align: middle;
+      font-size: .55rem; font-weight: 700;
+      padding: 0px 5px; border-radius: 20px; margin-left: 2px; vertical-align: middle;
     }
 
-    /* col 3 — value, centered */
-    .val-col { text-align: right; padding-right: 8px; }
-    .usd-val { font-size: 1rem; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+    /* col 3 — value */
+    .val-col { text-align: right; padding-right: 6px; }
+    .usd-val { font-size: .88rem; font-weight: 700; line-height: 1.2; white-space: nowrap; }
     .price-tag {
-      font-size: .78rem; font-weight: 600; color: var(--text3);
-      margin-top: 3px; white-space: nowrap;
+      font-size: .68rem; font-weight: 600; color: var(--text3);
+      margin-top: 1px; white-space: nowrap;
     }
     .delta-tag {
-      font-size: .78rem; font-weight: 700;
-      margin-top: 2px; white-space: nowrap;
-      border-radius: 6px; padding: 1px 5px; display: inline-block;
+      font-size: .68rem; font-weight: 700;
+      margin-top: 1px; white-space: nowrap;
+      border-radius: 5px; padding: 0px 4px; display: inline-block;
     }
-    .delta-wait { color: var(--text3); background: none; font-size: .72rem; }
+    .delta-wait { color: var(--text3); background: none; font-size: .65rem; }
     .delta-up { color: var(--short); background: var(--short-l); }
     .delta-dn { color: var(--long);  background: var(--long-l); }
 
-    /* zaman damgası — coin adının altında, sola yaslanmış */
+    /* zaman damgası */
     .row-ts {
-      font-size: .95rem; font-weight: 700;
-      color: var(--text); margin-top: 3px;
+      font-size: .72rem; font-weight: 700;
+      color: var(--text3); margin-top: 1px;
     }
 
-    /* col 4 — links */
+    /* col 4 — links yatay, küçük */
     .links {
-      display: flex; flex-direction: column;
-      gap: 4px; align-items: flex-end;
+      display: flex; flex-direction: row;
+      gap: 3px; align-items: center;
     }
     .ex-link {
       background: var(--purple-l); color: var(--purple);
-      padding: 5px 10px; border-radius: 20px;
-      font-size: .75rem; font-weight: 700;
+      padding: 3px 7px; border-radius: 12px;
+      font-size: .68rem; font-weight: 700;
       text-decoration: none; transition: .12s;
-      border: 1.5px solid rgba(168,85,247,.15);
-      white-space: nowrap; display: block;
-      min-height: 28px; display: flex; align-items: center;
+      border: 1px solid rgba(168,85,247,.12);
+      white-space: nowrap;
+      min-height: 22px; display: flex; align-items: center;
     }
     .ex-link:active { background: var(--purple); color: white; }
 
@@ -712,10 +714,11 @@
 
     /* ---- RESPONSIVE ---- */
     @media (max-width: 360px) {
-      .liq-row { grid-template-columns: 40px 1fr auto auto; }
-      .usd-val { font-size: .9rem; }
+      .liq-row { grid-template-columns: 28px 1fr auto auto; }
+      .usd-val { font-size: .82rem; }
       .stat-num { font-size: .8rem; }
-      .row-ts { font-size: .82rem; }
+      .row-ts { font-size: .65rem; }
+      .ex-link { padding: 2px 5px; font-size: .62rem; }
     }
 
     /* ---- STATUS BADGE ---- */
@@ -765,6 +768,7 @@
       <span class="stat-emoji">&#x1F40B;</span>
       <div class="stat-lbl">En Buyuk OOF</div>
       <div class="stat-num wha" id="statBiggest">&#x2014;</div>
+      <div id="statBiggestCoin" style="font-size:.6rem;font-weight:700;color:var(--whale);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 2px"></div>
     </div>
   </div>
 
@@ -1113,20 +1117,43 @@ const saveFilters = () => {
   } catch(e) {}
 };
 
-/* ═══════════════════ PRICE CACHE ═══════════════════ */
-const priceCache = new Map(); // symbol -> { price, ts }
-const PRICE_TTL  = 30000;  // 30 saniye cache — daha az istek
+/* ═══════════════════ CANLI FİYAT — WSS Mini Ticker ═══════════════════ */
+// Tüm Futures coinlerinin anlık fiyatı tek bağlantıyla
+const priceCache = new Map(); // symbol -> price (number)
+let priceWs = null;
+let priceWsRc = 0;
 
+function connectPriceStream() {
+  if (priceWs) { try { priceWs.close(); } catch(e) {} }
+  priceWs = new WebSocket("wss://fstream.binance.com/ws/!miniTicker@arr");
+  priceWs.onmessage = e => {
+    try {
+      const arr = JSON.parse(e.data);
+      if (!Array.isArray(arr)) return;
+      arr.forEach(t => {
+        if (t.s && t.c) priceCache.set(t.s, parseFloat(t.c));
+      });
+    } catch(err) {}
+  };
+  priceWs.onopen  = () => { priceWsRc = 0; };
+  priceWs.onclose = () => {
+    const delay = Math.min(30000, 2000 * Math.pow(2, priceWsRc++));
+    setTimeout(connectPriceStream, delay);
+  };
+  priceWs.onerror = () => priceWs.close();
+}
+
+// Fiyat al — WSS cache'den, yoksa REST fallback
 async function fetchPrice(symbol) {
-  const now = Date.now();
   const cached = priceCache.get(symbol);
-  if (cached && now - cached.ts < PRICE_TTL) return cached.price;
+  if (cached) return cached;
+  // WSS henüz bağlanmadıysa REST fallback
   try {
     const r = await fetch("https://fapi.binance.com/fapi/v1/ticker/price?symbol=" + symbol);
     if (!r.ok) return null;
     const d = await r.json();
     const p = parseFloat(d.price);
-    priceCache.set(symbol, { price: p, ts: Date.now() });
+    priceCache.set(symbol, p);
     return p;
   } catch(e) { return null; }
 }
@@ -1319,14 +1346,91 @@ async function saveMemoryCoin(key, data) {
 async function addMemoryRecord(symbol, side, val, deltas) {
   const mem = await loadMemory();
   const key = base(symbol);
-  if (!mem[key]) mem[key] = { records: [] };
+  if (!mem[key]) mem[key] = { records: [], lagProfiles: { SELL: [], BUY: [] } };
+  if (!mem[key].lagProfiles) mem[key].lagProfiles = { SELL: [], BUY: [] };
   const cutoff = Date.now() - MEMORY_DAYS * 86400000;
   mem[key].records = mem[key].records.filter(r => r.time > cutoff);
   mem[key].records.push({ time: Date.now(), side, val, ...deltas });
   if (mem[key].records.length > MEMORY_MAX) {
     mem[key].records = mem[key].records.slice(-MEMORY_MAX);
   }
-  saveMemoryCoin(key, mem[key]); // async, beklemiyoruz
+  saveMemoryCoin(key, mem[key]);
+}
+
+/* ═══════════════════ LAG ANALİZİ ═══════════════════ */
+// Likit anından 65sn sonra 1s kline çek, dip/tepe zamanını hesapla
+async function computeLag(symbol, side, liqTime, liqPrice) {
+  // 65sn bekle — klines'ın oluşması için
+  await new Promise(r => setTimeout(r, 65000));
+  try {
+    const startTime = liqTime - 2000; // 2sn öncesinden başla
+    const r = await fetch(
+      `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1s&limit=65&startTime=${startTime}`
+    );
+    if (!r.ok) return;
+    const klines = await r.json();
+    if (!klines || klines.length < 10) return;
+
+    // Her saniyedeki low/high fiyatları
+    const lows  = klines.map((k, i) => ({ t: i, price: parseFloat(k[3]) }));
+    const highs = klines.map((k, i) => ({ t: i, price: parseFloat(k[2]) }));
+
+    let lagSec, extremePrice, recoveryPct;
+
+    if (side === "SELL") {
+      // Long yandı = fiyat düştü → dip ara
+      const dipIdx = lows.reduce((mi, v, i) => v.price < lows[mi].price ? i : mi, 0);
+      lagSec = dipIdx; // kaçıncı saniyede dip
+      extremePrice = lows[dipIdx].price;
+      // Dipten sonra 30sn içinde toparlanma
+      const after = highs.slice(dipIdx, dipIdx + 30);
+      const maxAfter = after.length ? Math.max(...after.map(h => h.price)) : extremePrice;
+      recoveryPct = ((maxAfter - extremePrice) / extremePrice) * 100;
+    } else {
+      // Short yandı = fiyat yükseldi → tepe ara
+      const peakIdx = highs.reduce((mi, v, i) => v.price > highs[mi].price ? i : mi, 0);
+      lagSec = peakIdx;
+      extremePrice = highs[peakIdx].price;
+      const after = lows.slice(peakIdx, peakIdx + 30);
+      const minAfter = after.length ? Math.min(...after.map(l => l.price)) : extremePrice;
+      recoveryPct = ((extremePrice - minAfter) / extremePrice) * 100;
+    }
+
+    // Firebase'e kaydet
+    const mem = await loadMemory();
+    const key = base(symbol);
+    if (!mem[key]) mem[key] = { records: [], lagProfiles: { SELL: [], BUY: [] } };
+    if (!mem[key].lagProfiles) mem[key].lagProfiles = { SELL: [], BUY: [] };
+    if (!mem[key].lagProfiles[side]) mem[key].lagProfiles[side] = [];
+
+    mem[key].lagProfiles[side].push({
+      t: Date.now(),
+      lag: lagSec,
+      recovery: parseFloat(recoveryPct.toFixed(3)),
+      val: 0 // büyüklük bilgisi burada yok ama kayıt için
+    });
+
+    // Son 50 lag kaydını tut
+    if (mem[key].lagProfiles[side].length > 50) {
+      mem[key].lagProfiles[side] = mem[key].lagProfiles[side].slice(-50);
+    }
+
+    saveMemoryCoin(key, mem[key]);
+  } catch(e) {}
+}
+
+function getLagStats(symbol, side) {
+  const key = base(symbol);
+  const mem = memCache[key];
+  if (!mem || !mem.lagProfiles || !mem.lagProfiles[side] || mem.lagProfiles[side].length < 3) return null;
+  const lags = mem.lagProfiles[side];
+  const avgLag = lags.reduce((s, l) => s + l.lag, 0) / lags.length;
+  const avgRecovery = lags.reduce((s, l) => s + l.recovery, 0) / lags.length;
+  return {
+    n: lags.length,
+    avgLag: Math.round(avgLag),
+    avgRecovery: parseFloat(avgRecovery.toFixed(2))
+  };
 }
 
 async function getMemoryStats(symbol) {
@@ -1358,7 +1462,11 @@ async function getMemoryStats(symbol) {
     total: recs.length,
     long:  calcStats(longRecs),
     short: calcStats(shortRecs),
-    oldest: recs[0] ? recs[0].time : null
+    oldest: recs[0] ? recs[0].time : null,
+    lag: {
+      long:  getLagStats(symbol, "SELL"),
+      short: getLagStats(symbol, "BUY")
+    }
   };
 }
 /* ═══════════════════ DOM REFS ═══════════════════ */
@@ -1519,11 +1627,18 @@ function haptic(strong = false) {
 let toastTimer = null;
 function showToast(sym, val, side) {
   const lbl = side === "SELL" ? "LONG YANDI" : "SHORT YANDI";
-  D.toastMsg.textContent = sym + "  " + fmt(val) + "  " + lbl;
+  // Lag uyarısı ekle
+  const lagSt = getLagStats(sym + "USDT", side);
+  let lagTxt = "";
+  if (lagSt && lagSt.n >= 3) {
+    const dipTepe = side === "SELL" ? "dip" : "tepe";
+    lagTxt = ` ⏱️ Geçmişte ~${lagSt.avgLag}sn'de ${dipTepe}`;
+  }
+  D.toastMsg.textContent = sym + "  " + fmt(val) + "  " + lbl + lagTxt;
   D.toast.classList.add("show");
   haptic(true);
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => D.toast.classList.remove("show"), 5000);
+  toastTimer = setTimeout(() => D.toast.classList.remove("show"), 6000);
 }
 D.toastClose.addEventListener("click", () => {
   D.toast.classList.remove("show");
@@ -1574,6 +1689,17 @@ function addItem(item) {
   const cascadeInfo = checkCascade(item.symbol, item.side, item.time);
   item._cascade = cascadeInfo;
 
+  // Lag analizi — $10K+ likit için 65sn sonra 1s kline çek
+  if (v >= 10000) {
+    computeLag(item.symbol, item.side, item.time, item.price);
+  }
+
+  // Lag uyarısı — toast'a ekle (hafıza yüklüyse)
+  const lagSt = getLagStats(item.symbol, item.side);
+  if (lagSt && lagSt.n >= 3 && v >= cfg.alertThr) {
+    item._lagAlert = lagSt;
+  }
+
   // add to list
   items.unshift(item);
   if (items.length > MAX_ITEMS) items.pop();
@@ -1590,9 +1716,11 @@ function addItem(item) {
 function updateBanner() {
   if (!stats.biggestItem) return;
   const b = base(stats.biggestItem.symbol);
-  const lbl = stats.biggestItem.side === "SELL" ? "LONG YANDI" : "SHORT YANDI";
-  D.bannerSym.textContent = b + "  " + lbl;
-  D.bannerVal.textContent = fmt(stats.biggest);
+  const lbl = stats.biggestItem.side === "SELL" ? "L" : "S";
+  // Stats bar'da coin adını göster
+  const coinEl = document.getElementById("statBiggestCoin");
+  if (coinEl) coinEl.textContent = b + " " + lbl;
+  // Eski banner gizli kalır
   D.banner.classList.add("show");
 }
 
@@ -1678,7 +1806,7 @@ function renderFeed() {
       '</div>' +
       '<div class="val-col">' +
         '<div class="usd-val" style="color:' + color + '">' + fmt(item.valueUSD) + '</div>' +
-        '<div class="price-tag">' + fmtPrice(item.price) + '</div>' +
+        '<div class="price-tag">' + fmtPrice(priceCache.get(item.symbol) || item.price) + '</div>' +
       '</div>' +
       '<div class="links">' +
         '<a class="ex-link" href="' + tv + '" target="_blank" rel="noopener">TV</a>' +
@@ -2157,25 +2285,34 @@ function analyzeMarketData(symbol, marketData, item, cascadeInfo, memStats) {
     const bids = depth.bids.map(b => ({ price: parseFloat(b[0]), qty: parseFloat(b[1]) }));
     const asks = depth.asks.map(a => ({ price: parseFloat(a[0]), qty: parseFloat(a[1]) }));
 
-    // En büyük duvarları bul
-    const bigBid = bids.reduce((max, b) => b.qty > max.qty ? b : max, bids[0]);
-    const bigAsk = asks.reduce((max, a) => a.qty > max.qty ? a : max, asks[0]);
+    // Mevcut fiyatı klines'tan al — order book ile tutarlılık kontrolü
+    const currentPrice = klines ? parseFloat(klines[klines.length - 1][4]) : 0;
 
-    // Toplam alış/satış hacmi
-    const totalBid = bids.reduce((s, b) => s + b.qty * b.price, 0);
-    const totalAsk = asks.reduce((s, a) => s + a.qty * a.price, 0);
-    const bidDom = totalBid > totalAsk;
+    // Tutarlılık kontrolü: bid'ler mevcut fiyatın altında, ask'lar üstünde olmalı
+    const validBids = bids.filter(b => !currentPrice || b.price <= currentPrice * 1.01);
+    const validAsks = asks.filter(a => !currentPrice || a.price >= currentPrice * 0.99);
 
-    results.push({
-      icon: "🧱",
-      title: "Order Book",
-      main: `${bidDom ? "Alış" : "Satış"} baskısı ağır basıyor`,
-      hint: `En büyük alış duvarı: ${fmtPrice(bigBid.price)} (${bigBid.qty.toFixed(1)} adet) | En büyük satış duvarı: ${fmtPrice(bigAsk.price)} (${bigAsk.qty.toFixed(1)} adet)`,
-      color: bidDom ? "var(--short)" : "var(--long)",
-      extra: isL
-        ? `📍 Fiyat düşerse ${fmtPrice(bigBid.price)} seviyesinde büyük alış var — burası destek`
-        : `📍 Fiyat yükselirse ${fmtPrice(bigAsk.price)} seviyesinde büyük satış var — burası direnç`
-    });
+    if (validBids.length === 0 || validAsks.length === 0) {
+      // Veri tutarsız — gösterme
+    } else {
+      const bigBid = validBids.reduce((max, b) => b.qty > max.qty ? b : max, validBids[0]);
+      const bigAsk = validAsks.reduce((max, a) => a.qty > max.qty ? a : max, validAsks[0]);
+
+      const totalBid = validBids.reduce((s, b) => s + b.qty * b.price, 0);
+      const totalAsk = validAsks.reduce((s, a) => s + a.qty * a.price, 0);
+      const bidDom = totalBid > totalAsk;
+
+      results.push({
+        icon: "🧱",
+        title: "Order Book",
+        main: `${bidDom ? "Alış" : "Satış"} baskısı ağır basıyor`,
+        hint: `En büyük alış duvarı: ${fmtPrice(bigBid.price)} (${bigBid.qty.toFixed(1)} adet) | En büyük satış duvarı: ${fmtPrice(bigAsk.price)} (${bigAsk.qty.toFixed(1)} adet)`,
+        color: bidDom ? "var(--short)" : "var(--long)",
+        extra: isL
+          ? `📍 Fiyat düşerse ${fmtPrice(bigBid.price)} seviyesinde büyük alış var — burası destek`
+          : `📍 Fiyat yükselirse ${fmtPrice(bigAsk.price)} seviyesinde büyük satış var — burası direnç`
+      });
+    }
   }
 
   /* ── 3. FUNDING RATE ── */
@@ -2278,7 +2415,173 @@ function analyzeMarketData(symbol, marketData, item, cascadeInfo, memStats) {
     }
   }
 
+  /* ── 7. YÖN ANALİZİ (Liquidity Hunter) ── */
+  const dirPattern = analyzeDirectionPattern(symbol, 300000); // son 5dk
+  if (dirPattern && dirPattern.total >= 3) {
+    const domLabel = dirPattern.dom === "long" ? "Long" : "Short";
+    const karsiLabel = dirPattern.dom === "long" ? "short" : "long";
+    const domIcon = dirPattern.dom === "long" ? "📉" : "📈";
+    const domColor = dirPattern.dom === "long" ? "var(--long)" : "var(--short)";
+
+    let yorumMain, yorumHint, yorumExtra;
+
+    if (dirPattern.domPct >= 85) {
+      yorumMain = `${domIcon} Son 5dk'da %${dirPattern.domPct} ${domLabel} yandı — tek yönlü baskı`;
+      yorumHint = `${dirPattern.total} likit, toplam ${fmt(dirPattern.totalVol)}. Fiyat güçlü ${dirPattern.dom === "long" ? "aşağı" : "yukarı"} gidiyor, ${karsiLabel}'lar eziliyor.`;
+      yorumExtra = `⚠️ Risk: ${dirPattern.dom === "long" ? "Short" : "Long"} yoğunluğu artıyor — ani dönüşte cascade olabilir`;
+    } else if (dirPattern.domPct >= 65) {
+      yorumMain = `${domIcon} ${domLabel} ağırlıklı (%${dirPattern.domPct}) — baskı devam ediyor`;
+      yorumHint = `${dirPattern.total} likit: ${dirPattern.longCount} long, ${dirPattern.shortCount} short yandı.`;
+      yorumExtra = dirPattern.hizlaniyor ? "⚡ Son 60sn'de hızlanma var — momentum artıyor" : null;
+    } else {
+      yorumMain = `⚖️ Dengeli likit dağılımı (%${dirPattern.longPct} long / %${dirPattern.shortPct} short)`;
+      yorumHint = `${dirPattern.total} likit, net bir yön yok. Piyasa kararsız.`;
+      yorumExtra = null;
+    }
+
+    results.push({
+      icon: "🎯",
+      title: "Yön Analizi (5dk)",
+      main: yorumMain,
+      hint: yorumHint,
+      color: domColor,
+      extra: yorumExtra
+    });
+  }
+
+  /* ── 8. LİQUİDİTY HUNT DEDEKTÖRü ── */
+  const huntSignal = detectLiquidityHunt(symbol, klines);
+  if (huntSignal) {
+    const huntDir = huntSignal.type === "down" ? "aşağı" : "yukarı";
+    const huntIcon = huntSignal.type === "down" ? "📉" : "📈";
+    results.push({
+      icon: "🦈",
+      title: "Liquidity Hunt Tespiti",
+      main: `${huntIcon} Ani ${huntDir} spike + ${huntSignal.count} likit + geri dönüş`,
+      hint: `Fiyat %${huntSignal.spike} spike yaptı, ${fmt(huntSignal.hunted)} likit oldu, sonra %${huntSignal.recovery} geri döndü. Bu bir "stop-loss avı" olabilir.`,
+      color: "var(--whale)",
+      extra: `💡 Büyük oyuncular stop-loss'ları temizledi ve geri döndü — fiyat ${huntSignal.type === "down" ? "yukarı" : "aşağı"} devam edebilir`
+    });
+  }
+
+  /* ── 9. LAG ANALİZİ (Firebase'den) ── */
+  const lagSt = getLagStats(symbol, isL !== null ? (isL ? "SELL" : "BUY") : "SELL");
+  if (lagSt && lagSt.n >= 3) {
+    const dipTepe = isL ? "dip" : "tepe";
+    const yon = isL ? "yukarı" : "aşağı";
+    const lagColor = isL ? "var(--short)" : "var(--long)";
+    results.push({
+      icon: "⏱️",
+      title: "Gecikme Analizi (Lag)",
+      main: `Likit sonrası ortalama ${lagSt.avgLag} saniyede ${dipTepe}`,
+      hint: `${lagSt.n} ölçüme göre: ${dipTepe} noktasından sonra ort. %${lagSt.avgRecovery} ${yon} toparlanma oluyor.`,
+      color: lagColor,
+      extra: `💡 Şu an likit olduysa ~${lagSt.avgLag}sn içinde ${dipTepe} bekleniyor — sonra ${yon} pozisyon fırsatı olabilir`
+    });
+  }
+
   return results;
+}
+
+/* ═══════════════════ YÖN ANALİZİ + LİQUİDİTY HUNT ═══════════════════ */
+
+// Belirli bir coin için son N dakikadaki likit verilerini analiz et
+function analyzeDirectionPattern(symbol, windowMs = 300000) {
+  const now = Date.now();
+  const cutoff = now - windowMs;
+  const coinItems = items.filter(i => i.symbol === symbol && i.time > cutoff);
+  if (coinItems.length < 2) return null;
+
+  const longItems  = coinItems.filter(i => i.side === "SELL"); // long yandı
+  const shortItems = coinItems.filter(i => i.side === "BUY");  // short yandı
+
+  const longVol  = longItems.reduce((s, i) => s + i.valueUSD, 0);
+  const shortVol = shortItems.reduce((s, i) => s + i.valueUSD, 0);
+  const totalVol = longVol + shortVol;
+  if (totalVol === 0) return null;
+
+  const longPct  = Math.round(longVol  / totalVol * 100);
+  const shortPct = Math.round(shortVol / totalVol * 100);
+  const dom = longVol > shortVol ? "long" : "short";
+  const domPct = dom === "long" ? longPct : shortPct;
+
+  // Hız analizi — son 60sn vs önceki 4dk
+  const recent60  = coinItems.filter(i => i.time > now - 60000);
+  const prev240   = coinItems.filter(i => i.time <= now - 60000);
+  const recentVol = recent60.reduce((s, i) => s + i.valueUSD, 0);
+  const prevVol   = prev240.reduce((s, i) => s + i.valueUSD, 0) / 4; // dakika başına
+  const hizlaniyor = recentVol > prevVol * 1.5;
+
+  return {
+    total: coinItems.length,
+    longCount: longItems.length, shortCount: shortItems.length,
+    longVol, shortVol, totalVol,
+    longPct, shortPct, dom, domPct,
+    hizlaniyor, recentVol, prevVol
+  };
+}
+
+// Liquidity Hunt dedektörü — ani spike + büyük likit + hızlı geri dönüş
+function detectLiquidityHunt(symbol, klines) {
+  if (!klines || klines.length < 10) return null;
+
+  const now = Date.now();
+  const last5min = items.filter(i => i.symbol === symbol && i.time > now - 300000);
+  if (last5min.length < 2) return null;
+
+  // Son 10 mumda ani spike ara
+  const last10 = klines.slice(-10);
+  const closes = last10.map(k => parseFloat(k[4]));
+  const highs  = last10.map(k => parseFloat(k[2]));
+  const lows   = last10.map(k => parseFloat(k[3]));
+
+  let huntSignal = null;
+
+  for (let i = 1; i < last10.length - 1; i++) {
+    const prevClose = closes[i - 1];
+    const currLow   = lows[i];
+    const currHigh  = highs[i];
+    const nextClose = closes[i + 1] || closes[i];
+
+    // Aşağı spike: ani düşüş sonra geri dönüş
+    const downSpike = (prevClose - currLow) / prevClose * 100;
+    const downRecov = (nextClose - currLow) / currLow * 100;
+    if (downSpike > 0.3 && downRecov > downSpike * 0.5) {
+      // Bu spike sırasında long likit var mı?
+      const spikeLiqs = last5min.filter(l => l.side === "SELL" && l.valueUSD > 5000);
+      if (spikeLiqs.length > 0) {
+        const totalHunted = spikeLiqs.reduce((s, l) => s + l.valueUSD, 0);
+        huntSignal = {
+          type: "down",
+          spike: downSpike.toFixed(2),
+          recovery: downRecov.toFixed(2),
+          hunted: totalHunted,
+          count: spikeLiqs.length
+        };
+        break;
+      }
+    }
+
+    // Yukarı spike: ani yükseliş sonra geri dönüş
+    const upSpike = (currHigh - prevClose) / prevClose * 100;
+    const upRecov = (currHigh - nextClose) / currHigh * 100;
+    if (upSpike > 0.3 && upRecov > upSpike * 0.5) {
+      const spikeLiqs = last5min.filter(l => l.side === "BUY" && l.valueUSD > 5000);
+      if (spikeLiqs.length > 0) {
+        const totalHunted = spikeLiqs.reduce((s, l) => s + l.valueUSD, 0);
+        huntSignal = {
+          type: "up",
+          spike: upSpike.toFixed(2),
+          recovery: upRecov.toFixed(2),
+          hunted: totalHunted,
+          count: spikeLiqs.length
+        };
+        break;
+      }
+    }
+  }
+
+  return huntSignal;
 }
 
 function renderAnalysisResults(results, container) {
@@ -2471,7 +2774,15 @@ function openAnalyzeModal(symbol, itemIdx) {
           '</div>' +
           '<div style="font-size:.72rem;color:var(--text3);text-align:center;margin-top:8px;line-height:1.5">' +
           '⚠️ Bu veriler geçmiş davranışlara dayanır.<br>Gelecek garantisi vermez. Kendi kararını kendin ver.' +
-          '</div>';
+          '</div>' +
+          // Lag istatistikleri
+          (stats2.lag && (stats2.lag.long || stats2.lag.short) ? (
+            '<div style="margin-top:12px;padding:10px 12px;background:white;border-radius:var(--r-sm);border-left:4px solid var(--purple)">' +
+            '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px">⏱️ Gecikme Analizi</div>' +
+            (stats2.lag.long ? `<div style="font-size:.85rem;font-weight:600;color:var(--long);margin-bottom:3px">Long likit → ort. ${stats2.lag.long.avgLag}sn'de dip (${stats2.lag.long.n} ölçüm, +%${stats2.lag.long.avgRecovery} toparlanma)</div>` : "") +
+            (stats2.lag.short ? `<div style="font-size:.85rem;font-weight:600;color:var(--short)">Short likit → ort. ${stats2.lag.short.avgLag}sn'de tepe (${stats2.lag.short.n} ölçüm, +%${stats2.lag.short.avgRecovery} geri dönüş)</div>` : "") +
+            '</div>'
+          ) : "");
       });
     });
   }
@@ -2617,6 +2928,7 @@ function init() {
   updateStatsUI();
   renderActBar();
   connect();
+  connectPriceStream(); // Canlı fiyat stream'i
 
   // Buffer flush: every 300ms
   bufIv = setInterval(flushBuffer, BUF_MS);
@@ -2627,6 +2939,7 @@ function init() {
   window.addEventListener("beforeunload", () => {
     clearInterval(bufIv); clearInterval(tlIv);
     if (ws) ws.close();
+    if (priceWs) priceWs.close();
   });
 
   window.addEventListener("resize", () => {
