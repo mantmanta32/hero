@@ -1084,7 +1084,7 @@ const saveFilters = () => {
 
 /* ═══════════════════ PRICE CACHE ═══════════════════ */
 const priceCache = new Map(); // symbol -> { price, ts }
-const PRICE_TTL  = 8000;     // 8 saniye cache
+const PRICE_TTL  = 30000;  // 30 saniye cache — daha az istek
 
 async function fetchPrice(symbol) {
   const now = Date.now();
@@ -1333,15 +1333,33 @@ async function getMemoryStats(symbol) {
 // Likit anındaki fiyatı kaydeder, 30sn/1dk/3dk/5dk sonra delta gösterir + hafızaya yazar
 const deltaMap = new Map();
 
+// İstek kuyruğu — aynı anda max 3 istek
+let _fetchQueue = 0;
+const MAX_CONCURRENT = 3;
+const _fetchWaiters = [];
+
+function acquireFetch() {
+  return new Promise(resolve => {
+    if (_fetchQueue < MAX_CONCURRENT) { _fetchQueue++; resolve(); }
+    else _fetchWaiters.push(resolve);
+  });
+}
+function releaseFetch() {
+  _fetchQueue--;
+  if (_fetchWaiters.length) { _fetchQueue++; _fetchWaiters.shift()(); }
+}
+
 async function fetchPriceFresh(symbol) {
+  await acquireFetch();
   try {
     const r = await fetch("https://fapi.binance.com/fapi/v1/ticker/price?symbol=" + symbol);
-    if (!r.ok) return null;
+    if (!r.ok) { releaseFetch(); return null; }
     const d = await r.json();
     const p = parseFloat(d.price);
     priceCache.set(symbol, { price: p, ts: Date.now() });
+    releaseFetch();
     return p;
-  } catch(e) { return null; }
+  } catch(e) { releaseFetch(); return null; }
 }
 
 function scheduleDelta(symbol, entryPrice, elId, item) {
@@ -1708,8 +1726,8 @@ function renderFeed() {
       if (priceEl) priceEl.textContent = fmtPrice(p);
     });
 
-    // 30 saniye sonra delta hesapla
-    if (!item._delta) scheduleDelta(item.symbol, item.price, deltaId, item);
+    // 30 saniye sonra delta hesapla — sadece $1K+ likit için
+    if (!item._delta && item.valueUSD >= 1000) scheduleDelta(item.symbol, item.price, deltaId, item);
   });
 
   D.feedList.innerHTML = "";
