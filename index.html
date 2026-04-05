@@ -2586,20 +2586,24 @@ function detectLiquidityHunt(symbol, klines) {
 
 function renderAnalysisResults(results, container) {
   if (!results.length) {
-    container.innerHTML = '<div style="color:var(--text3);font-size:.85rem;text-align:center;padding:12px">Veri alınamadı</div>';
+    container.innerHTML = '<div style="color:var(--text3);font-size:.82rem;text-align:center;padding:10px">Veri alınamadı</div>';
     return;
   }
-  container.innerHTML = results.map(r =>
-    `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:white;border-radius:var(--r-sm);margin-bottom:8px;border-left:4px solid ${r.color}">
-      <div style="font-size:1.3rem;flex-shrink:0">${r.icon}</div>
-      <div style="flex:1">
-        <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:.3px">${r.title}</div>
-        <div style="font-size:.95rem;font-weight:700;color:${r.color};margin-top:2px">${r.main}</div>
-        <div style="font-size:.75rem;color:var(--text3);margin-top:3px;line-height:1.4">${r.hint}</div>
-        ${r.extra ? `<div style="font-size:.78rem;font-weight:700;color:var(--text);margin-top:5px;padding:5px 8px;background:var(--bg);border-radius:8px">${r.extra}</div>` : ""}
-      </div>
-    </div>`
-  ).join("");
+  // 2 kolonlu grid — her kart kompakt
+  container.innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
+    results.map(r =>
+      `<div style="background:white;border-radius:10px;padding:8px 10px;border-left:3px solid ${r.color};border:1px solid rgba(168,85,247,.1);border-left:3px solid ${r.color}">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+          <span style="font-size:.95rem">${r.icon}</span>
+          <span style="font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:.2px">${r.title}</span>
+        </div>
+        <div style="font-size:.8rem;font-weight:700;color:${r.color};line-height:1.3">${r.main}</div>
+        <div style="font-size:.68rem;color:var(--text3);margin-top:3px;line-height:1.4">${r.hint}</div>
+        ${r.extra ? `<div style="font-size:.68rem;font-weight:700;color:var(--text);margin-top:4px;padding:3px 6px;background:var(--bg);border-radius:6px;line-height:1.3">${r.extra}</div>` : ""}
+      </div>`
+    ).join("") +
+    '</div>';
 }
 
 /* ═══════════════════ ANALİZ MODAL ═══════════════════ */
@@ -2620,40 +2624,38 @@ function openAnalyzeModal(symbol, itemIdx) {
   const sig = item ? getSignalComment(item, cascadeInfo) : null;
   const isL = item ? item.side === "SELL" : null;
   const color = isL ? "var(--long)" : "var(--short)";
+  const livePrice = priceCache.get(symbol);
 
-  // Temel bilgi + sinyal yorumu
+  // Kompakt header — tek blok
   let infoHtml = "";
   if (item) {
     infoHtml =
-      '<div style="background:white;border-radius:var(--r-sm);padding:12px 14px;margin-bottom:12px;border:1.5px solid var(--border)">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-          '<span style="font-size:1.1rem;font-weight:700;color:var(--text)">' + b + '</span>' +
-          '<span style="font-size:.85rem;font-weight:700;color:' + color + '">' + (isL ? "📉 Long Yandı" : "📈 Short Yandı") + '</span>' +
+      '<div style="background:white;border-radius:10px;padding:8px 12px;margin-bottom:8px;border:1px solid var(--border)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<span style="font-size:1rem;font-weight:700;color:var(--text)">' + b + '</span>' +
+          '<span style="font-size:.82rem;font-weight:700;color:' + color + '">' + (isL ? "📉 Long Yandı" : "📈 Short Yandı") + '</span>' +
         '</div>' +
-        '<div style="display:flex;gap:16px;font-size:.85rem;font-weight:600;color:var(--text3)">' +
+        '<div style="display:flex;gap:10px;font-size:.75rem;font-weight:600;color:var(--text3);margin-top:3px;flex-wrap:wrap">' +
           '<span>💰 ' + fmt(item.valueUSD) + '</span>' +
-          '<span>💲 ' + fmtPrice(item.price) + '</span>' +
+          '<span>💲 ' + fmtPrice(livePrice || item.price) + (livePrice ? ' <span style="color:var(--short);font-size:.65rem">●canlı</span>' : '') + '</span>' +
           '<span>🕐 ' + tsStr(item.time) + '</span>' +
         '</div>' +
+        (sig ? '<div style="margin-top:5px;padding:5px 8px;background:var(--bg);border-radius:7px;border-left:3px solid ' + color + '">' +
+          '<div style="font-size:.78rem;font-weight:700;color:' + color + '">' + sig.main + '</div>' +
+          '<div style="font-size:.68rem;color:var(--text3);margin-top:2px;line-height:1.4">' + sig.hint + '</div>' +
+        '</div>' : '') +
       '</div>';
-    if (sig) {
-      infoHtml +=
-        '<div class="signal-box ' + sig.cls + '" style="margin:0 0 12px">' +
-          '<div class="signal-main" style="font-size:1.05rem">' + sig.main + '</div>' +
-          '<div class="signal-hint">' + sig.hint + '</div>' +
-        '</div>';
-    }
-  }
+  } // if (item) kapanışı
 
-  // Anlık analiz bölümü — hemen yükleniyor göster
+  // Anlık analiz bölümü
   infoHtml +=
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-      '<div style="font-size:.78rem;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:.3px">🔬 Anlık Piyasa Analizi</div>' +
-      '<div id="analysisAge" style="font-size:.68rem;color:var(--text3)"></div>' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+      '<div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:.3px">🔬 Anlık Piyasa Analizi</div>' +
+      '<div id="analysisAge" style="font-size:.62rem;color:var(--text3)"></div>' +
     '</div>' +
-    '<div id="analysisContainer"><div style="text-align:center;padding:20px;color:var(--text3)">⏳ Analiz yükleniyor...</div></div>' +
-    '<div style="margin-top:12px">' +
-      '<button id="modalMemBtn" style="width:100%;background:var(--purple-l);border:2px solid var(--border);border-radius:var(--r-pill);padding:10px;font-family:\'Fredoka\',sans-serif;font-size:.9rem;font-weight:700;color:var(--purple);cursor:pointer;margin-bottom:8px">🧠 Hafıza Analizi</button>' +
+    '<div id="analysisContainer"><div style="text-align:center;padding:12px;color:var(--text3);font-size:.82rem">⏳ Yükleniyor...</div></div>' +
+    '<div style="margin-top:10px">' +
+      '<button id="modalMemBtn" style="width:100%;background:var(--purple-l);border:1.5px solid var(--border);border-radius:var(--r-pill);padding:8px;font-family:\'Fredoka\',sans-serif;font-size:.85rem;font-weight:700;color:var(--purple);cursor:pointer;margin-bottom:6px">🧠 Hafıza Analizi</button>' +
       '<div id="modalMemContent"></div>' +
     '</div>';
 
