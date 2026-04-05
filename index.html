@@ -760,6 +760,33 @@
             <div class="toggle on" id="togSound"></div>
           </div>
 
+          <!-- SES PROFİLİ -->
+          <div style="margin-top:4px;margin-bottom:4px" id="soundOptions">
+            <div class="inp-label" style="margin-bottom:8px">&#x1F3B5; Ses Profili</div>
+            <div class="filter-chip-group" id="profileChips">
+              <button class="chip active" data-profile="classic">&#x1F514; Classic</button>
+              <button class="chip" data-profile="arcade">&#x1F579; Arcade</button>
+              <button class="chip" data-profile="chill">&#x1F3B6; Chill</button>
+            </div>
+            <div style="margin-top:12px">
+              <label class="inp-label" for="volSlider">&#x1F50A; Ses Seviyesi</label>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+                <span style="font-size:1rem">🔈</span>
+                <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.5"
+                  style="flex:1;accent-color:var(--purple);height:6px;cursor:pointer">
+                <span style="font-size:1rem">🔊</span>
+                <span id="volPct" style="font-size:.85rem;font-weight:700;color:var(--purple);min-width:36px;text-align:right">50%</span>
+              </div>
+            </div>
+            <button id="testSoundBtn" style="
+              margin-top:10px;width:100%;
+              background:var(--purple-l);border:2px solid var(--border);
+              border-radius:var(--r-pill);padding:10px;
+              font-family:'Fredoka',sans-serif;font-size:.9rem;font-weight:700;
+              color:var(--purple);cursor:pointer;transition:.15s;
+            ">&#x25B6;&#xFE0F; Sesi Test Et</button>
+          </div>
+
           <div class="set-item">
             <div class="set-icon off" id="ntfIcon">&#x1F515;</div>
             <div class="set-inf">
@@ -868,7 +895,7 @@ let donutChart = null;
 let stats = { vol:0, longs:0, shorts:0, longVol:0, shortVol:0, biggest:0, biggestItem:null };
 
 /* ═══════════════════ SETTINGS ═══════════════════ */
-let cfg = { sound:true, desktop:false, whale:true, alertThr:10000, whaleSz:500000 };
+let cfg = { sound:true, desktop:false, whale:true, alertThr:10000, whaleSz:500000, volume:0.5, soundProfile:"classic" };
 try {
   const s = localStorage.getItem("lv3_cfg");
   if (s) cfg = Object.assign(cfg, JSON.parse(s));
@@ -957,6 +984,10 @@ const D = {
   mktInsights : $("mktInsights"),
   feedBadge   : $("feedBadge"),
   clearFeedBtn: $("clearFeedBtn"),
+  volSlider   : $("volSlider"),
+  volPct      : $("volPct"),
+  testSoundBtn: $("testSoundBtn"),
+  soundOptions: $("soundOptions"),
   pages: {
     feed      : $("tab-feed"),
     analytics : $("tab-analytics"),
@@ -993,20 +1024,72 @@ const tsStr = t => new Date(t).toLocaleTimeString("tr-TR", {
 });
 
 /* ═══════════════════ AUDIO ═══════════════════ */
-function beep(whale = false) {
+// Profiller: classic | arcade | chill
+// classic: eski bip sesi
+// arcade: oyun tarzı 8-bit
+// chill: yumuşak, dikkat dağıtmayan
+
+function beep(whale = false, isLong = false) {
   if (!cfg.sound) return;
+  const vol = (cfg.volume ?? 0.5);
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    const ctx = new AC(), o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.type = whale ? "sawtooth" : "sine";
-    o.frequency.value = whale ? 420 : 820;
-    g.gain.value = 0.07;
-    const d = whale ? 0.45 : 0.13;
-    o.start();
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + d);
-    o.stop(ctx.currentTime + d);
+    const ctx = new AC();
+    const g = ctx.createGain();
+    g.connect(ctx.destination);
+    g.gain.value = vol * 0.15;
+
+    const profile = cfg.soundProfile || "classic";
+
+    if (whale) {
+      // Balina: tüm profillerde güçlü, farklı melodi
+      const freqs = [220, 330, 440];
+      freqs.forEach((f, i) => {
+        const o = ctx.createOscillator();
+        o.connect(g);
+        o.type = "sawtooth";
+        o.frequency.value = f;
+        o.start(ctx.currentTime + i * 0.12);
+        g.gain.setValueAtTime(vol * 0.15, ctx.currentTime + i * 0.12);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.12 + 0.3);
+        o.stop(ctx.currentTime + i * 0.12 + 0.35);
+      });
+      return;
+    }
+
+    if (profile === "classic") {
+      const o = ctx.createOscillator();
+      o.connect(g);
+      o.type = "sine";
+      o.frequency.value = isLong ? 520 : 880; // long=alçak, short=yüksek
+      o.start();
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+      o.stop(ctx.currentTime + 0.18);
+
+    } else if (profile === "arcade") {
+      // 8-bit tarzı iki nota
+      const notes = isLong ? [330, 220] : [660, 880];
+      notes.forEach((f, i) => {
+        const o = ctx.createOscillator();
+        o.connect(g);
+        o.type = "square";
+        o.frequency.value = f;
+        o.start(ctx.currentTime + i * 0.08);
+        o.stop(ctx.currentTime + i * 0.08 + 0.07);
+      });
+
+    } else if (profile === "chill") {
+      // Yumuşak, kısa sine
+      const o = ctx.createOscillator();
+      o.connect(g);
+      o.type = "sine";
+      o.frequency.value = isLong ? 440 : 660;
+      g.gain.value = vol * 0.06;
+      o.start();
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
+      o.stop(ctx.currentTime + 0.45);
+    }
   } catch(e) {}
 }
 
@@ -1057,7 +1140,7 @@ function addItem(item) {
 
   // alerts
   const isWhale = v >= cfg.whaleSz;
-  if (v >= cfg.alertThr) { beep(isWhale); haptic(isWhale); }
+  if (v >= cfg.alertThr) { beep(isWhale, isL); haptic(isWhale); }
   if (isWhale && cfg.whale) showToast(b, v, item.side);
 
   if (cfg.desktop && document.hidden && Notification.permission === "granted") {
@@ -1532,9 +1615,46 @@ function setupSettings() {
   D.alertThr.value = cfg.alertThr;
   D.whaleSz.value  = cfg.whaleSz;
 
+  // Ses profili başlangıç durumu
+  const vol = cfg.volume ?? 0.5;
+  if (D.volSlider) { D.volSlider.value = vol; D.volPct.textContent = Math.round(vol * 100) + "%"; }
+  document.querySelectorAll("[data-profile]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.profile === (cfg.soundProfile || "classic"));
+  });
+  if (D.soundOptions) D.soundOptions.style.display = cfg.sound ? "" : "none";
+
+  // Volume slider
+  if (D.volSlider) {
+    D.volSlider.addEventListener("input", e => {
+      cfg.volume = parseFloat(e.target.value);
+      D.volPct.textContent = Math.round(cfg.volume * 100) + "%";
+      saveCfg();
+    });
+  }
+
+  // Profil chip'leri
+  document.querySelectorAll("[data-profile]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      cfg.soundProfile = btn.dataset.profile;
+      document.querySelectorAll("[data-profile]").forEach(x => x.classList.remove("active"));
+      btn.classList.add("active");
+      saveCfg();
+    });
+  });
+
+  // Test butonu
+  if (D.testSoundBtn) {
+    D.testSoundBtn.addEventListener("click", () => {
+      beep(false, false); // short sesi
+      setTimeout(() => beep(false, true), 400); // long sesi
+      setTimeout(() => beep(true), 900); // balina sesi
+    });
+  }
+
   D.togSound.addEventListener("click", () => {
     cfg.sound = !cfg.sound;
     apTog(D.togSound, D.sndIcon, cfg.sound, "&#x1F50A;", "&#x1F507;");
+    if (D.soundOptions) D.soundOptions.style.display = cfg.sound ? "" : "none";
     saveCfg();
   });
 
