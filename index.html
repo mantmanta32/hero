@@ -324,6 +324,14 @@
       font-size: .78rem; font-weight: 600; color: var(--text3);
       margin-top: 3px; white-space: nowrap;
     }
+    .delta-tag {
+      font-size: .78rem; font-weight: 700;
+      margin-top: 2px; white-space: nowrap;
+      border-radius: 6px; padding: 1px 5px; display: inline-block;
+    }
+    .delta-wait { color: var(--text3); background: none; font-size: .72rem; }
+    .delta-up { color: var(--short); background: var(--short-l); }
+    .delta-dn { color: var(--long);  background: var(--long-l); }
 
     /* zaman damgası — coin adının altında, sola yaslanmış */
     .row-ts {
@@ -561,6 +569,75 @@
     @keyframes float { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-10px) } }
     .float { animation: float 2.4s ease-in-out infinite; }
 
+    /* ---- SİNYAL YORUMU ---- */
+    .signal-box {
+      margin: 4px 8px 0;
+      border-radius: var(--r-sm);
+      padding: 10px 14px;
+      border-left: 4px solid;
+    }
+    .signal-box.cascade {
+      background: linear-gradient(90deg, rgba(244,63,94,.1), rgba(251,146,60,.05));
+      border-left-color: var(--long);
+      animation: cascadePulse 1.5s ease-in-out infinite;
+    }
+    @keyframes cascadePulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(244,63,94,.2); }
+      50%      { box-shadow: 0 0 0 6px rgba(244,63,94,.0); }
+    }
+    .signal-box.squeeze {
+      background: linear-gradient(90deg, rgba(16,185,129,.1), rgba(34,211,238,.05));
+      border-left-color: var(--short);
+    }
+    .signal-box.whale-signal {
+      background: linear-gradient(90deg, rgba(245,158,11,.12), rgba(251,191,36,.05));
+      border-left-color: var(--whale);
+    }
+    .signal-box.normal {
+      background: var(--bg);
+      border-left-color: var(--border);
+    }
+    .signal-main {
+      font-size: 1rem; font-weight: 700; line-height: 1.3;
+    }
+    .signal-hint {
+      font-size: .72rem; font-weight: 600; color: var(--text3);
+      margin-top: 3px; line-height: 1.4;
+    }
+
+    /* cascade badge — kart üzerinde */
+    .cascade-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: linear-gradient(135deg, var(--long), var(--orange));
+      color: white; font-size: .72rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px; margin-left: 4px;
+      vertical-align: middle; animation: blink .8s infinite;
+    }
+    .squeeze-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: linear-gradient(135deg, var(--short), var(--cyan));
+      color: white; font-size: .72rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px; margin-left: 4px;
+      vertical-align: middle;
+    }
+
+    /* piyasa yorumu kartı */
+    .market-comment {
+      background: linear-gradient(135deg, var(--purple-l), var(--blue-l));
+      border: 2px solid var(--border); border-radius: var(--r);
+      margin: 8px 8px 0; padding: 16px;
+    }
+    .mc-title { font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    .mc-line {
+      display: flex; align-items: flex-start; gap: 8px;
+      margin-bottom: 8px; padding: 8px 10px;
+      background: white; border-radius: var(--r-sm);
+      border-left: 3px solid var(--purple);
+    }
+    .mc-icon { font-size: 1.2rem; flex-shrink: 0; }
+    .mc-text { font-size: .88rem; font-weight: 600; color: var(--text); line-height: 1.4; }
+    .mc-hint { font-size: .72rem; color: var(--text3); margin-top: 2px; }
+
     /* ---- RESPONSIVE ---- */
     @media (max-width: 360px) {
       .liq-row { grid-template-columns: 40px 1fr auto auto; }
@@ -662,6 +739,12 @@
     <!-- ===== ANALYTICS PAGE ===== -->
     <div class="page" id="tab-analytics">
       <div class="page-scroll">
+
+        <!-- PİYASA YORUMU — otomatik üretilir -->
+        <div class="market-comment" id="marketComment">
+          <div class="mc-title">🧠 Piyasa Yorumu</div>
+          <div id="mcLines"><div style="color:var(--text3);font-size:.85rem">Veri bekleniyor...</div></div>
+        </div>
         <div class="a-card">
           <div class="a-title">&#x1F4C8; Para Yanma Akisi</div>
           <div class="a-sub">Son 60 saniye - Long ve Short kiyaslamasi</div>
@@ -894,6 +977,9 @@ let donutChart = null;
 
 let stats = { vol:0, longs:0, shorts:0, longVol:0, shortVol:0, biggest:0, biggestItem:null };
 
+/* cascade tracker: symbol -> [{time, side}, ...] son 60sn */
+const cascadeMap = new Map();
+
 /* ═══════════════════ SETTINGS ═══════════════════ */
 let cfg = { sound:true, desktop:false, whale:true, alertThr:10000, whaleSz:500000, volume:0.5, soundProfile:"classic" };
 try {
@@ -914,8 +1000,11 @@ fSide    = filterState.side;
 fSym     = filterState.sym;
 sortMode = filterState.sort;
 const saveFilters = () => {
-  filterState = { amt: fAmt, side: fSide, sym: fSym, sort: sortMode, customAmt: D.customAmt ? D.customAmt.value : "" };
-  try { localStorage.setItem("lv3_filters", JSON.stringify(filterState)); } catch(e) {}
+  try {
+    const fs = { amt: fAmt, side: fSide, sym: fSym, sort: sortMode,
+                 customAmt: document.getElementById("customAmt") ? document.getElementById("customAmt").value : "" };
+    localStorage.setItem("lv3_filters", JSON.stringify(fs));
+  } catch(e) {}
 };
 
 /* ═══════════════════ PRICE CACHE ═══════════════════ */
@@ -941,6 +1030,243 @@ function fmtPrice(p) {
   if (p >= 1000) return "$" + p.toLocaleString("en-US", { maximumFractionDigits: 1 });
   if (p >= 1)    return "$" + p.toFixed(3);
   return "$" + p.toFixed(5);
+}
+
+/* ═══════════════════ CASCADE DEDEKTÖRü ═══════════════════ */
+// Son 60 saniyede aynı coinde kaç likit var?
+function checkCascade(symbol, side, time) {
+  const now = time || Date.now();
+  const key = symbol;
+  if (!cascadeMap.has(key)) cascadeMap.set(key, []);
+  const arr = cascadeMap.get(key);
+  arr.push({ time: now, side });
+  // 60 saniyeden eskiyi temizle
+  const cutoff = now - 60000;
+  const fresh = arr.filter(x => x.time > cutoff);
+  cascadeMap.set(key, fresh);
+
+  const longCount  = fresh.filter(x => x.side === "SELL").length;
+  const shortCount = fresh.filter(x => x.side === "BUY").length;
+  const total = fresh.length;
+
+  if (total >= 5) return { type: "cascade", count: total, longCount, shortCount };
+  if (total >= 3) return { type: "warning", count: total, longCount, shortCount };
+  return { type: "normal", count: total, longCount, shortCount };
+}
+
+/* ═══════════════════ SİNYAL YORUMU ═══════════════════ */
+function getSignalComment(item, cascadeInfo) {
+  const isL  = item.side === "SELL"; // long yandı
+  const isW  = item.valueUSD >= cfg.whaleSz;
+  const b    = base(item.symbol);
+  const { type, count, longCount, shortCount } = cascadeInfo;
+
+  // Cascade durumu
+  if (type === "cascade") {
+    if (isL) return {
+      cls: "cascade",
+      main: "⚡ " + b + " ÇOK SAYIDA LONG YANDI! (" + count + " kez)",
+      hint: "60 saniyede " + count + " long pozisyon zorla kapandı. Satış baskısı çok güçlü — fiyat düşmeye devam edebilir. Short fırsatı olabilir ama dikkatli ol.",
+      badge: '<span class="cascade-badge">🔥 ' + count + "x CASCADE</span>"
+    };
+    else return {
+      cls: "squeeze",
+      main: "⚡ " + b + " ÇOK SAYIDA SHORT YANDI! (" + count + " kez)",
+      hint: "60 saniyede " + count + " short pozisyon zorla kapandı. Alış baskısı çok güçlü — fiyat yükselmeye devam edebilir. Long fırsatı olabilir ama dikkatli ol.",
+      badge: '<span class="squeeze-badge">🚀 ' + count + "x SQUEEZE</span>"
+    };
+  }
+
+  if (type === "warning") {
+    if (isL) return {
+      cls: "cascade",
+      main: "⚠️ " + b + " art arda long yanıyor (" + count + " kez)",
+      hint: "Kısa sürede " + count + " long pozisyon kapandı. Satış baskısı artıyor — izlemeye devam et.",
+      badge: '<span class="cascade-badge">' + count + "x</span>"
+    };
+    else return {
+      cls: "squeeze",
+      main: "⚠️ " + b + " art arda short yanıyor (" + count + " kez)",
+      hint: "Kısa sürede " + count + " short pozisyon kapandı. Alış baskısı artıyor — izlemeye devam et.",
+      badge: '<span class="squeeze-badge">' + count + "x</span>"
+    };
+  }
+
+  // Balina
+  if (isW) return {
+    cls: "whale-signal",
+    main: "🐋 DEV POZİSYON YANDI! " + fmt(item.valueUSD),
+    hint: isL
+      ? "Çok büyük bir long pozisyon zorla kapandı. Bu kadar büyük satış baskısı fiyatı aşağı çekebilir."
+      : "Çok büyük bir short pozisyon zorla kapandı. Bu kadar büyük alış baskısı fiyatı yukarı itebilir.",
+    badge: ""
+  };
+
+  // Normal
+  return {
+    cls: "normal",
+    main: isL
+      ? "📉 " + b + " long pozisyon yandı"
+      : "📈 " + b + " short pozisyon yandı",
+    hint: isL
+      ? "Birisi long pozisyonunu kaybetti. Fiyat düştü ve stop-loss tetiklendi."
+      : "Birisi short pozisyonunu kaybetti. Fiyat yükseldi ve stop-loss tetiklendi.",
+    badge: ""
+  };
+}
+
+/* ═══════════════════ PİYASA YORUMU ═══════════════════ */
+function renderMarketComment() {
+  const el = document.getElementById("mcLines");
+  if (!el) return;
+  const tot = stats.longs + stats.shorts;
+  if (!tot) { el.innerHTML = '<div style="color:var(--text3);font-size:.85rem">Veri bekleniyor...</div>'; return; }
+
+  const lp   = ((stats.longs / tot) * 100).toFixed(0);
+  const sp   = ((stats.shorts / tot) * 100).toFixed(0);
+  const dom  = stats.longVol > stats.shortVol ? "long" : "short";
+  const domPct = ((Math.max(stats.longVol, stats.shortVol) / stats.vol) * 100).toFixed(0);
+
+  // Cascade olan coinler
+  const hotCoins = [];
+  cascadeMap.forEach((arr, sym) => {
+    const fresh = arr.filter(x => x.time > Date.now() - 60000);
+    if (fresh.length >= 3) hotCoins.push({ sym: base(sym), count: fresh.length });
+  });
+  hotCoins.sort((a,b) => b.count - a.count);
+
+  const lines = [];
+
+  // Genel durum
+  if (parseInt(lp) > 65) {
+    lines.push({ icon:"📉", main:"Piyasada long pozisyonlar daha çok yanıyor (%"+lp+")", hint:"Çoğu trader yukarı bahis yapmış ama kaybediyor. Fiyat düşüş baskısı altında." });
+  } else if (parseInt(sp) > 65) {
+    lines.push({ icon:"📈", main:"Piyasada short pozisyonlar daha çok yanıyor (%"+sp+")", hint:"Çoğu trader aşağı bahis yapmış ama kaybediyor. Fiyat yükseliş baskısı altında." });
+  } else {
+    lines.push({ icon:"⚖️", main:"Piyasa dengeli — long ve short eşit yanıyor", hint:"Net bir yön yok. Piyasa kararsız, büyük hareket öncesi olabilir." });
+  }
+
+  // Hacim yorumu
+  lines.push({ icon: dom === "long" ? "🔴" : "🟢",
+    main: (dom === "long" ? "Long" : "Short") + " tarafta daha fazla para yandı (%"+domPct+")",
+    hint: dom === "long"
+      ? "Toplam yanan paranın büyük kısmı long pozisyonlardan. Satış baskısı ağır basıyor."
+      : "Toplam yanan paranın büyük kısmı short pozisyonlardan. Alış baskısı ağır basıyor."
+  });
+
+  // Cascade coinler
+  if (hotCoins.length > 0) {
+    const names = hotCoins.slice(0,3).map(c => c.sym + "("+c.count+"x)").join(", ");
+    lines.push({ icon:"⚡", main:"Zincirleme yanma: " + names, hint:"Bu coinlerde kısa sürede çok sayıda likit gerçekleşti. Fiyat hareketi güçlü olabilir." });
+  }
+
+  // En büyük
+  if (stats.biggestItem) {
+    const b2 = base(stats.biggestItem.symbol);
+    const side2 = stats.biggestItem.side === "SELL" ? "long" : "short";
+    lines.push({ icon:"🐋", main:"En büyük tek yanma: " + b2 + " " + fmt(stats.biggest), hint:"Bu seanstaki en büyük tek likit. " + b2 + " üzerinde " + side2 + " pozisyon zorla kapandı." });
+  }
+
+  el.innerHTML = lines.map(l =>
+    '<div class="mc-line">' +
+      '<div class="mc-icon">' + l.icon + '</div>' +
+      '<div>' +
+        '<div class="mc-text">' + l.main + '</div>' +
+        '<div class="mc-hint">' + l.hint + '</div>' +
+      '</div>' +
+    '</div>'
+  ).join("");
+}
+
+/* ═══════════════════ COİN HAFIZASI ═══════════════════ */
+// localStorage'da coin bazlı likit davranış hafızası
+// Format: { [symbol]: { records: [{time, side, val, d30s, d1m, d3m, d5m}, ...] } }
+const MEMORY_KEY  = "lv3_memory";
+const MEMORY_DAYS = 7;   // 7 günden eski kayıtları sil
+const MEMORY_MAX  = 100; // coin başına max kayıt
+
+function loadMemory() {
+  try { return JSON.parse(localStorage.getItem(MEMORY_KEY) || "{}"); } catch(e) { return {}; }
+}
+function saveMemory(mem) {
+  try { localStorage.setItem(MEMORY_KEY, JSON.stringify(mem)); } catch(e) {}
+}
+function addMemoryRecord(symbol, side, val, deltas) {
+  const mem = loadMemory();
+  const key = base(symbol);
+  if (!mem[key]) mem[key] = { records: [] };
+  const cutoff = Date.now() - MEMORY_DAYS * 86400000;
+  // Eski kayıtları temizle
+  mem[key].records = mem[key].records.filter(r => r.time > cutoff);
+  mem[key].records.push({ time: Date.now(), side, val, ...deltas });
+  // Max kayıt sınırı
+  if (mem[key].records.length > MEMORY_MAX) {
+    mem[key].records = mem[key].records.slice(-MEMORY_MAX);
+  }
+  saveMemory(mem);
+}
+function getMemoryStats(symbol) {
+  const mem = loadMemory();
+  const key = base(symbol);
+  if (!mem[key] || !mem[key].records.length) return null;
+  const recs = mem[key].records;
+  const longRecs  = recs.filter(r => r.side === "SELL");
+  const shortRecs = recs.filter(r => r.side === "BUY");
+
+  function calcStats(arr) {
+    if (!arr.length) return null;
+    const withD30 = arr.filter(r => r.d30s != null);
+    const withD1m = arr.filter(r => r.d1m  != null);
+    const withD3m = arr.filter(r => r.d3m  != null);
+    const withD5m = arr.filter(r => r.d5m  != null);
+    const avg = (a, k) => a.length ? (a.reduce((s,r) => s + r[k], 0) / a.length) : null;
+    const upPct = (a, k) => a.length ? Math.round(a.filter(r => r[k] > 0).length / a.length * 100) : null;
+    return {
+      count: arr.length,
+      avgVal: arr.reduce((s,r) => s + r.val, 0) / arr.length,
+      d30s: { avg: avg(withD30,"d30s"), up: upPct(withD30,"d30s"), n: withD30.length },
+      d1m:  { avg: avg(withD1m, "d1m"),  up: upPct(withD1m, "d1m"),  n: withD1m.length  },
+      d3m:  { avg: avg(withD3m, "d3m"),  up: upPct(withD3m, "d3m"),  n: withD3m.length  },
+      d5m:  { avg: avg(withD5m, "d5m"),  up: upPct(withD5m, "d5m"),  n: withD5m.length  },
+    };
+  }
+  return {
+    total: recs.length,
+    long:  calcStats(longRecs),
+    short: calcStats(shortRecs),
+    oldest: recs[0] ? recs[0].time : null
+  };
+}
+// Likit anındaki fiyatı kaydeder, 30sn sonra delta gösterir
+// deltaMap: itemKey -> { symbol, entryPrice, elId }
+const deltaMap = new Map();
+
+function scheduleDelta(symbol, entryPrice, elId, item) {
+  if (!entryPrice || entryPrice <= 0) return;
+  const key = elId;
+  deltaMap.set(key, { symbol, entryPrice, elId, item });
+  setTimeout(async () => {
+    const entry = deltaMap.get(key);
+    if (!entry) return;
+    deltaMap.delete(key);
+    try {
+      const r = await fetch("https://fapi.binance.com/fapi/v1/ticker/price?symbol=" + entry.symbol);
+      if (!r.ok) return;
+      const d = await r.json();
+      const nowPrice = parseFloat(d.price);
+      priceCache.set(entry.symbol, { price: nowPrice, ts: Date.now() });
+      const pct = ((nowPrice - entry.entryPrice) / entry.entryPrice) * 100;
+      const sign = pct >= 0 ? "+" : "";
+      const arrow = pct >= 0 ? "📈" : "📉";
+      const txt = arrow + " " + sign + pct.toFixed(2) + "%";
+      const cls = "delta-tag " + (pct >= 0 ? "delta-up" : "delta-dn");
+      // item objesine kaydet — re-render'da da görünsün
+      if (entry.item) { entry.item._delta = txt; entry.item._deltaCls = cls; }
+      // DOM'da hâlâ varsa direkt güncelle
+      const el = document.getElementById(entry.elId);
+      if (el) { el.textContent = txt; el.className = cls; }
+    } catch(e) {}
+  }, 30000);
 }
 
 /* ═══════════════════ DOM REFS ═══════════════════ */
@@ -1152,6 +1478,10 @@ function addItem(item) {
     } catch(e) {}
   }
 
+  // cascade kontrolü — item'a ekle
+  const cascadeInfo = checkCascade(item.symbol, item.side, item.time);
+  item._cascade = cascadeInfo;
+
   // add to list
   items.unshift(item);
   if (items.length > MAX_ITEMS) items.pop();
@@ -1225,10 +1555,14 @@ function renderFeed() {
 
     const row = document.createElement("div");
     row.className = rowCls;
+    const deltaId = "delta_" + item.symbol + "_" + item.time;
+    const cascadeInfo = item._cascade || { type:"normal", count:1, longCount:0, shortCount:0 };
+    const sig = getSignalComment(item, cascadeInfo);
+
     row.innerHTML =
       '<div class="coin-avatar ' + avCls + '">' + coinHTML(item.symbol) + '</div>' +
       '<div class="sym-col">' +
-        '<div class="sym-name">' + b + '<span class="sym-perp">PERP</span></div>' +
+        '<div class="sym-name">' + b + '<span class="sym-perp">PERP</span>' + sig.badge + '</div>' +
         '<div class="sym-side" style="color:' + color + '">' +
           sideIcon + ' ' + sideStr +
           (isW ? '<span class="whale-tag">BALiNA</span>' : '') +
@@ -1238,6 +1572,7 @@ function renderFeed() {
       '<div class="val-col">' +
         '<div class="usd-val" style="color:' + color + '">' + fmt(item.valueUSD) + '</div>' +
         '<div class="price-tag" id="px_' + item.symbol + '_' + item.time + '">...</div>' +
+        '<div class="' + (item._deltaCls || "delta-tag delta-wait") + '" id="' + deltaId + '">' + (item._delta || "⏳ 30s") + '</div>' +
       '</div>' +
       '<div class="links">' +
         '<a class="ex-link" href="' + tv + '" target="_blank" rel="noopener">TV</a>' +
@@ -1245,13 +1580,27 @@ function renderFeed() {
         '<a class="ex-link" href="' + mx + '" target="_blank" rel="noopener">MX</a>' +
       '</div>';
 
-    // Fiyatı async yükle
+    // Sinyal yorum kutusu — kartın altında, tam genişlik
+    const sigBox = document.createElement("div");
+    sigBox.className = "signal-box " + sig.cls;
+    sigBox.innerHTML =
+      '<div class="signal-main">' + sig.main + '</div>' +
+      '<div class="signal-hint">' + sig.hint + '</div>';
+
+    // Wrapper — kart + yorum kutusu birlikte
+    const wrapper = document.createElement("div");
+    wrapper.appendChild(row);
+    wrapper.appendChild(sigBox);
+    frag.appendChild(wrapper);
+
+    // Anlık fiyatı göster
     const priceEl = row.querySelector('.price-tag');
     fetchPrice(item.symbol).then(p => {
       if (priceEl) priceEl.textContent = fmtPrice(p);
     });
 
-    frag.appendChild(row);
+    // 30 saniye sonra delta hesapla
+    if (!item._delta) scheduleDelta(item.symbol, item.price, deltaId, item);
   });
 
   D.feedList.innerHTML = "";
@@ -1278,7 +1627,7 @@ function updateStatsUI() {
 function updateAnalytics() {
   const anOn  = D.pages.analytics.classList.contains("active");
   const mktOn = D.pages.filter.classList.contains("active");
-  if (anOn) { renderTopSyms(); renderSessStats(); updateVolChart(); }
+  if (anOn) { renderTopSyms(); renderSessStats(); updateVolChart(); renderMarketComment(); }
   if (mktOn) { renderDensity(); renderInsights(); }
   renderActBar();
 }
