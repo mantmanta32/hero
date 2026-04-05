@@ -922,6 +922,14 @@
             <button class="chip" data-time="3600">1 saat</button>
           </div>
 
+          <div class="inp-label" style="margin-top:14px">Sinyal Tipi</div>
+          <div class="filter-chip-group" id="signalChips">
+            <button class="chip active" data-signal="all">🌊 Hepsi</button>
+            <button class="chip" data-signal="cascade">⚡ Cascade</button>
+            <button class="chip" data-signal="warning">⚠️ Uyarı</button>
+            <button class="chip" data-signal="whale">🐋 Balina</button>
+          </div>
+
           <button id="exportCsvBtn" style="width:100%;margin-top:14px;background:var(--short-l);border:2px solid var(--short);border-radius:var(--r-pill);padding:12px;font-family:'Fredoka',sans-serif;font-size:.9rem;font-weight:700;color:var(--short);cursor:pointer">📥 CSV İndir</button>
         </div>
 
@@ -1064,6 +1072,7 @@ let fAmt     = 0;
 let fSide    = "all";
 let fSym     = "";
 let fTime    = 0;
+let fSignal  = "all"; // all | cascade | warning | whale
 let sortMode = "time";
 let paused   = false;
 let unread   = 0;
@@ -1738,6 +1747,14 @@ function renderFeed() {
     const cutoff = Date.now() - fTime * 1000;
     fl = fl.filter(i => i.time > cutoff);
   }
+  // Sinyal tipi filtresi
+  if (fSignal === "cascade") {
+    fl = fl.filter(i => i._cascade && i._cascade.type === "cascade");
+  } else if (fSignal === "warning") {
+    fl = fl.filter(i => i._cascade && (i._cascade.type === "warning" || i._cascade.type === "cascade"));
+  } else if (fSignal === "whale") {
+    fl = fl.filter(i => i.valueUSD >= cfg.whaleSz);
+  }
 
   // sort
   if (sortMode === "size") fl.sort((a,b) => b.valueUSD - a.valueUSD);
@@ -2151,6 +2168,19 @@ function setupFilters() {
     });
   }
 
+  // Sinyal tipi chip'leri
+  const signalChipsEl = document.getElementById("signalChips");
+  if (signalChipsEl) {
+    signalChipsEl.querySelectorAll("[data-signal]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        signalChipsEl.querySelectorAll("[data-signal]").forEach(x => x.classList.remove("active"));
+        btn.classList.add("active");
+        fSignal = btn.dataset.signal;
+        renderFeed();
+      });
+    });
+  }
+
   // CSV export
   const exportBtn = document.getElementById("exportCsvBtn");
   if (exportBtn) {
@@ -2213,6 +2243,9 @@ function setupScroll() {
 const _aCache = new Map();
 const _aTTL = { depth: 5000, klines: 30000, funding: 60000, oi: 15000 };
 
+// OI geçmişi — squeeze skoru için önceki değerle karşılaştırma
+const _oiHistory = new Map(); // symbol -> [{val, ts}, ...]
+
 async function _safeFetch(url, key) {
   const now = Date.now();
   const cached = _aCache.get(key);
@@ -2228,18 +2261,30 @@ async function _safeFetch(url, key) {
 
 async function fetchMarketData(symbol) {
   const BASE = "https://fapi.binance.com/fapi/v1";
-  // Paralel — biri başarısız olursa diğerleri devam eder
   const [depth, klines, funding, oi] = await Promise.allSettled([
     _safeFetch(`${BASE}/depth?symbol=${symbol}&limit=20`,          `depth_${symbol}`),
     _safeFetch(`${BASE}/klines?symbol=${symbol}&interval=1m&limit=60`, `klines_${symbol}`),
     _safeFetch(`${BASE}/fundingRate?symbol=${symbol}&limit=1`,     `funding_${symbol}`),
     _safeFetch(`${BASE}/openInterest?symbol=${symbol}`,            `oi_${symbol}`)
   ]);
+  const oiData = oi.status === "fulfilled" ? oi.value : null;
+
+  // OI geçmişine kaydet — squeeze skoru için
+  if (oiData && oiData.openInterest) {
+    const oiVal = parseFloat(oiData.openInterest);
+    if (!_oiHistory.has(symbol)) _oiHistory.set(symbol, []);
+    const hist = _oiHistory.get(symbol);
+    hist.push({ val: oiVal, ts: Date.now() });
+    // Son 10 dakikayı tut
+    const cutoff = Date.now() - 600000;
+    _oiHistory.set(symbol, hist.filter(h => h.ts > cutoff));
+  }
+
   return {
     depth:   depth.status   === "fulfilled" ? depth.value   : null,
     klines:  klines.status  === "fulfilled" ? klines.value  : null,
     funding: funding.status === "fulfilled" ? funding.value : null,
-    oi:      oi.status      === "fulfilled" ? oi.value      : null,
+    oi:      oiData,
   };
 }
 
@@ -2480,10 +2525,203 @@ function analyzeMarketData(symbol, marketData, item, cascadeInfo, memStats) {
     });
   }
 
+  /* ── 10. BASKI BÖLGELERİ (LPL) ── */
+  const lpl = calcLPL(symbol);
+  if (lpl && lpl.zones.length > 0) {
+    const currentPrice = priceCache.get(symbol) || 0;
+    const zoneLines = lpl.zones.map((z, i) => {
+      const strength = i === 0 ? "🔴 Güçlü" : i === 1 ? "🟡 Orta" : "🟠 Zayıf";
+      const domTxt = z.dom === "long" ? "long baskısı — fiyat düşerken tetiklenir" : "short baskısı — fiyat yükselirken tetiklenir";
+      const near = currentPrice > 0 && Math.min(Math.abs(currentPrice - z.priceMin), Math.abs(currentPrice - z.priceMax)) / currentPrice < 0.01;
+      return `${strength}${near ? " ⚠️YAKINDA" : ""}: ${fmtPrice(z.priceMin)}–${fmtPrice(z.priceMax)} (${fmt(z.total)}, ${domTxt})`;
+    }).join(" | ");
+
+    results.push({
+      icon: "📍",
+      title: "Baskı Bölgeleri (LPL)",
+      main: `${lpl.zones.length} kritik fiyat bölgesi tespit edildi`,
+      hint: "Bu seviyelerde çok sayıda stop-loss var. Fiyat buraya gelince yeni likidasyon dalgası tetiklenebilir.",
+      color: "var(--orange)",
+      extra: zoneLines
+    });
+  }
+
+  /* ── 11. SIKIŞMA SKORU (Squeeze Score) ── */
+  const squeezeResult = calcSqueezeScore(symbol, funding, oi);
+  if (squeezeResult) {
+    const sc = squeezeResult.score;
+    const scoreColor = sc >= 70 ? "var(--long)" : sc >= 40 ? "var(--whale)" : "var(--text3)";
+    const scoreIcon = sc >= 70 ? "🔥" : sc >= 40 ? "⚡" : "😴";
+    const scoreLabel = sc >= 70 ? "YÜKSEK — Patlama yakın olabilir" : sc >= 40 ? "ORTA — Gerilim birikyor" : "DÜŞÜK — Sakin piyasa";
+    results.push({
+      icon: scoreIcon,
+      title: "Sıkışma Skoru",
+      main: `${sc}/100 — ${scoreLabel}`,
+      hint: squeezeResult.breakdown,
+      color: scoreColor,
+      extra: squeezeResult.direction
+    });
+  }
+
   return results;
 }
 
 /* ═══════════════════ YÖN ANALİZİ + LİQUİDİTY HUNT ═══════════════════ */
+
+/* ═══════════════════ SIKIŞMA SKORU ═══════════════════ */
+function calcSqueezeScore(symbol, funding, oi) {
+  let score = 0;
+  const parts = [];
+  let fundingRate = 0;
+
+  // 1. Funding skoru
+  if (funding && funding.length > 0) {
+    fundingRate = parseFloat(funding[0].fundingRate) * 100;
+    const fScore = Math.min(40, Math.abs(fundingRate) * 400);
+    score += fScore;
+    if (Math.abs(fundingRate) > 0.05) {
+      parts.push(`💸 Funding ${fundingRate > 0 ? "+" : ""}${fundingRate.toFixed(4)}% → +${Math.round(fScore)} puan (${Math.abs(fundingRate) > 0.1 ? "Aşırı baskı" : "Yüksek baskı"})`);
+    } else {
+      parts.push(`💸 Funding dengeli → +${Math.round(fScore)} puan`);
+    }
+  }
+
+  // 2. OI değişim skoru
+  const oiHist = _oiHistory.get(symbol) || [];
+  if (oi && oi.openInterest && oiHist.length >= 2) {
+    const currentOI = parseFloat(oi.openInterest);
+    // 5 dakika önceki OI
+    const cutoff5m = Date.now() - 300000;
+    const old5m = oiHist.filter(h => h.ts < cutoff5m).slice(-1)[0];
+    if (old5m) {
+      const oiChange = ((currentOI - old5m.val) / old5m.val) * 100;
+      let oiScore = 0;
+      if (Math.abs(oiChange) > 10) oiScore = 40;
+      else if (Math.abs(oiChange) > 5) oiScore = 25;
+      else if (Math.abs(oiChange) > 2) oiScore = 10;
+      score += oiScore;
+      parts.push(`📊 OI değişimi ${oiChange > 0 ? "+" : ""}${oiChange.toFixed(1)}% → +${oiScore} puan (${oiChange > 0 ? "Yeni pozisyon açılıyor" : "Pozisyon kapanıyor"})`);
+    }
+  }
+
+  // 3. Likit sessizlik skoru
+  const now = Date.now();
+  const coinItems = items.filter(i => i.symbol === symbol);
+  const last60s  = coinItems.filter(i => i.time > now - 60000).reduce((s, i) => s + i.valueUSD, 0);
+  const last5m   = coinItems.filter(i => i.time > now - 300000).reduce((s, i) => s + i.valueUSD, 0);
+  const avg5mPer60s = last5m / 5;
+  if (avg5mPer60s > 0 && last60s < avg5mPer60s * 0.5) {
+    score += 20;
+    parts.push(`🔇 Likit hacmi düştü → +20 puan (Patlama öncesi sessizlik olabilir)`);
+  } else if (avg5mPer60s > 0) {
+    parts.push(`📢 Likit hacmi normal → +0 puan`);
+  }
+
+  if (score === 0) return null;
+
+  // Yön tahmini
+  let direction = null;
+  if (score >= 40) {
+    if (fundingRate > 0.05) {
+      direction = "📉 Short squeeze riski: Çok fazla long var. Fiyat düşerse long'lar patlar.";
+    } else if (fundingRate < -0.05) {
+      direction = "📈 Long squeeze riski: Çok fazla short var. Fiyat yükselirse short'lar patlar.";
+    } else {
+      direction = "⚡ Yön belirsiz — her iki yönde de patlama olabilir.";
+    }
+  }
+
+  return {
+    score: Math.min(100, Math.round(score)),
+    breakdown: parts.join(" | "),
+    direction
+  };
+}
+
+/* ═══════════════════ LİKİDASYON BASKI BÖLGESİ (LPL) ═══════════════════ */
+function calcLPL(symbol, windowMs = 3600000) {
+  const now = Date.now();
+  const coinItems = items.filter(i => i.symbol === symbol && i.time > now - windowMs && i.price > 0);
+  if (coinItems.length < 3) return null;
+
+  const prices = coinItems.map(i => i.price);
+  const minP = Math.min(...prices);
+  const maxP = Math.max(...prices);
+  const range = maxP - minP;
+  if (range < minP * 0.001) return null; // çok dar aralık
+
+  const BUCKETS = 20;
+  const bucketSize = range / BUCKETS;
+  const buckets = Array(BUCKETS).fill(null).map((_, i) => ({
+    priceMin: minP + i * bucketSize,
+    priceMax: minP + (i + 1) * bucketSize,
+    total: 0, longVol: 0, shortVol: 0
+  }));
+
+  coinItems.forEach(item => {
+    const idx = Math.min(BUCKETS - 1, Math.floor((item.price - minP) / bucketSize));
+    if (idx < 0) return;
+    buckets[idx].total += item.valueUSD;
+    if (item.side === "SELL") buckets[idx].longVol += item.valueUSD;
+    else buckets[idx].shortVol += item.valueUSD;
+  });
+
+  // Dinamik eşik — o coinin ortalamasının 1.5 katı
+  const totalVol = buckets.reduce((s, b) => s + b.total, 0);
+  const avgBucket = totalVol / BUCKETS;
+  const threshold = avgBucket * 1.5;
+
+  // Eşiği geçen baskı bölgeleri — top 3
+  const pressureZones = buckets
+    .filter(b => b.total >= threshold)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 3)
+    .map(b => ({
+      priceMin: b.priceMin,
+      priceMax: b.priceMax,
+      total: b.total,
+      dom: b.longVol >= b.shortVol ? "long" : "short",
+      longPct: b.total > 0 ? Math.round(b.longVol / b.total * 100) : 0
+    }));
+
+  return pressureZones.length > 0 ? { zones: pressureZones, threshold } : null;
+}
+
+// Fiyat baskı bölgesine yaklaşıyor mu? (her 5sn kontrol)
+const _lplAlerted = new Set(); // tekrar uyarı verme
+function checkLPLProximity() {
+  if (!items.length) return;
+  // Aktif coinleri bul (son 5dk'da likit olan)
+  const recentSymbols = [...new Set(items.filter(i => i.time > Date.now() - 300000).map(i => i.symbol))];
+  recentSymbols.forEach(symbol => {
+    const lpl = calcLPL(symbol);
+    if (!lpl) return;
+    const currentPrice = priceCache.get(symbol);
+    if (!currentPrice) return;
+    lpl.zones.forEach(zone => {
+      const distToMin = Math.abs(currentPrice - zone.priceMin) / currentPrice;
+      const distToMax = Math.abs(currentPrice - zone.priceMax) / currentPrice;
+      const dist = Math.min(distToMin, distToMax);
+      const alertKey = symbol + "_" + zone.priceMin.toFixed(6);
+      if (dist <= 0.005 && !_lplAlerted.has(alertKey)) { // %0.5 yakınlık
+        _lplAlerted.add(alertKey);
+        setTimeout(() => _lplAlerted.delete(alertKey), 120000); // 2dk sonra tekrar uyarabilir
+        showLPLToast(symbol, zone, currentPrice);
+      }
+    });
+  });
+}
+
+function showLPLToast(symbol, zone, currentPrice) {
+  const b = base(symbol);
+  const domTxt = zone.dom === "long" ? "long baskısı" : "short baskısı";
+  const dirTxt = currentPrice < zone.priceMin ? "yukarı yaklaşıyor" : "aşağı yaklaşıyor";
+  D.toastMsg.textContent = b + " baskı bölgesine " + dirTxt + "! " + fmtPrice(zone.priceMin) + "–" + fmtPrice(zone.priceMax) + " (" + domTxt + ", " + fmt(zone.total) + ")";
+  D.toast.classList.add("show");
+  haptic(false);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => D.toast.classList.remove("show"), 6000);
+}
 
 // Belirli bir coin için son N dakikadaki likit verilerini analiz et
 function analyzeDirectionPattern(symbol, windowMs = 300000) {
@@ -2654,10 +2892,12 @@ function openAnalyzeModal(symbol, itemIdx) {
       '<div id="analysisAge" style="font-size:.62rem;color:var(--text3)"></div>' +
     '</div>' +
     '<div id="analysisContainer"><div style="text-align:center;padding:12px;color:var(--text3);font-size:.82rem">⏳ Yükleniyor...</div></div>' +
-    '<div style="margin-top:10px">' +
-      '<button id="modalMemBtn" style="width:100%;background:var(--purple-l);border:1.5px solid var(--border);border-radius:var(--r-pill);padding:8px;font-family:\'Fredoka\',sans-serif;font-size:.85rem;font-weight:700;color:var(--purple);cursor:pointer;margin-bottom:6px">🧠 Hafıza Analizi</button>' +
-      '<div id="modalMemContent"></div>' +
-    '</div>';
+    '<div style="margin-top:10px;display:flex;gap:6px">' +
+      '<button id="modalHeatBtn" style="flex:1;background:var(--blue-l);border:1.5px solid var(--border);border-radius:var(--r-pill);padding:8px;font-family:\'Fredoka\',sans-serif;font-size:.82rem;font-weight:700;color:var(--blue);cursor:pointer">📊 Fiyat Haritası</button>' +
+      '<button id="modalMemBtn" style="flex:1;background:var(--purple-l);border:1.5px solid var(--border);border-radius:var(--r-pill);padding:8px;font-family:\'Fredoka\',sans-serif;font-size:.82rem;font-weight:700;color:var(--purple);cursor:pointer">🧠 Hafıza Analizi</button>' +
+    '</div>' +
+    '<div id="modalHeatContent"></div>' +
+    '<div id="modalMemContent"></div>';
 
   body.innerHTML = infoHtml;
 
@@ -2703,6 +2943,18 @@ function openAnalyzeModal(symbol, itemIdx) {
       clearInterval(analysisInterval);
       document.getElementById("analyzeModal").classList.add("hidden");
     };
+  }
+
+  // Fiyat haritası butonu
+  const heatBtn = document.getElementById("modalHeatBtn");
+  if (heatBtn) {
+    heatBtn.addEventListener("click", () => {
+      const hc = document.getElementById("modalHeatContent");
+      if (!hc) return;
+      if (hc.innerHTML !== "") { hc.innerHTML = ""; heatBtn.textContent = "📊 Fiyat Haritası"; return; }
+      heatBtn.textContent = "📊 Kapatmak için tıkla";
+      renderLiqHeatmap(symbol, hc);
+    });
   }
 
   // Hafıza analizi butonu
@@ -2788,6 +3040,138 @@ function openAnalyzeModal(symbol, itemIdx) {
       });
     });
   }
+}
+
+/* ═══════════════════ LİKİDASYON ISI HARİTASI ═══════════════════ */
+function renderLiqHeatmap(symbol, container) {
+  const now = Date.now();
+  const windowMs = 3600000; // son 1 saat
+  const coinItems = items.filter(i => i.symbol === symbol && i.time > now - windowMs);
+
+  if (coinItems.length < 2) {
+    container.innerHTML = '<div style="color:var(--text3);font-size:.82rem;text-align:center;padding:12px">Bu coin için yeterli veri yok (en az 2 likit gerekli)</div>';
+    return;
+  }
+
+  // Fiyat aralığını bul
+  const prices = coinItems.map(i => i.price).filter(p => p > 0);
+  if (!prices.length) { container.innerHTML = '<div style="color:var(--text3);font-size:.82rem;text-align:center;padding:12px">Fiyat verisi yok</div>'; return; }
+
+  const minP = Math.min(...prices);
+  const maxP = Math.max(...prices);
+  const range = maxP - minP;
+  if (range === 0) { container.innerHTML = '<div style="color:var(--text3);font-size:.82rem;text-align:center;padding:12px">Fiyat aralığı çok dar</div>'; return; }
+
+  // 20 fiyat bucket'ı
+  const BUCKETS = 20;
+  const bucketSize = range / BUCKETS;
+  const buckets = Array(BUCKETS).fill(null).map((_, i) => ({
+    priceMin: minP + i * bucketSize,
+    priceMax: minP + (i + 1) * bucketSize,
+    longVol: 0, shortVol: 0, total: 0, count: 0
+  }));
+
+  coinItems.forEach(item => {
+    if (!item.price || item.price <= 0) return;
+    const idx = Math.min(BUCKETS - 1, Math.floor((item.price - minP) / bucketSize));
+    if (idx < 0) return;
+    buckets[idx].total += item.valueUSD;
+    buckets[idx].count++;
+    if (item.side === "SELL") buckets[idx].longVol += item.valueUSD;
+    else buckets[idx].shortVol += item.valueUSD;
+  });
+
+  const maxVol = Math.max(...buckets.map(b => b.total), 1);
+  const currentPrice = priceCache.get(symbol) || 0;
+
+  // Canvas ile çiz
+  const canvasId = "heatCanvas_" + symbol;
+  container.innerHTML =
+    '<div style="margin-top:8px">' +
+    '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px;letter-spacing:.3px">📊 Fiyat Bazlı Likidasyon Yoğunluğu (Son 1 Saat)</div>' +
+    '<div style="font-size:.65rem;color:var(--text3);margin-bottom:8px">Hangi fiyat seviyesinde ne kadar para yandı — kırmızı=long, yeşil=short</div>' +
+    '<canvas id="' + canvasId + '" style="width:100%;height:280px"></canvas>' +
+    '</div>';
+
+  requestAnimationFrame(() => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.offsetWidth;
+    const H = 280;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    const labelW = 68;
+    const barAreaW = W - labelW - 8;
+    const rowH = H / BUCKETS;
+
+    // En yüksek fiyat üstte
+    for (let i = BUCKETS - 1; i >= 0; i--) {
+      const b = buckets[i];
+      const y = (BUCKETS - 1 - i) * rowH;
+      const priceLabel = fmtPrice((b.priceMin + b.priceMax) / 2);
+
+      // Arka plan
+      ctx.fillStyle = i % 2 === 0 ? "rgba(168,85,247,.03)" : "rgba(168,85,247,.06)";
+      ctx.fillRect(0, y, W, rowH);
+
+      // Mevcut fiyat çizgisi
+      if (currentPrice > 0 && currentPrice >= b.priceMin && currentPrice <= b.priceMax) {
+        ctx.fillStyle = "rgba(168,85,247,.15)";
+        ctx.fillRect(0, y, W, rowH);
+        ctx.fillStyle = "var(--purple)";
+        ctx.font = "bold 9px Fredoka, sans-serif";
+        ctx.fillText("◄ ŞUAN", W - 48, y + rowH * 0.65);
+      }
+
+      if (b.total > 0) {
+        const totalW = (b.total / maxVol) * barAreaW;
+        const longW  = (b.longVol  / b.total) * totalW;
+        const shortW = (b.shortVol / b.total) * totalW;
+
+        // Long bar (kırmızı)
+        if (longW > 0) {
+          ctx.fillStyle = "rgba(244,63,94,.75)";
+          ctx.beginPath();
+          ctx.roundRect(labelW, y + 2, longW, rowH - 4, 3);
+          ctx.fill();
+        }
+        // Short bar (yeşil) — long'un yanına
+        if (shortW > 0) {
+          ctx.fillStyle = "rgba(16,185,129,.75)";
+          ctx.beginPath();
+          ctx.roundRect(labelW + longW, y + 2, shortW, rowH - 4, 3);
+          ctx.fill();
+        }
+
+        // Hacim yazısı
+        if (b.total > 1000) {
+          ctx.fillStyle = "rgba(59,31,94,.7)";
+          ctx.font = "bold 9px Fredoka, sans-serif";
+          ctx.fillText(fmt(b.total), labelW + totalW + 4, y + rowH * 0.65);
+        }
+      }
+
+      // Fiyat etiketi
+      ctx.fillStyle = "rgba(59,31,94,.6)";
+      ctx.font = "10px Fredoka, sans-serif";
+      ctx.fillText(priceLabel, 2, y + rowH * 0.65);
+    }
+
+    // Legend
+    ctx.fillStyle = "rgba(244,63,94,.8)";
+    ctx.fillRect(4, H - 16, 10, 10);
+    ctx.fillStyle = "rgba(59,31,94,.7)";
+    ctx.font = "9px Fredoka, sans-serif";
+    ctx.fillText("Long yandı", 18, H - 7);
+
+    ctx.fillStyle = "rgba(16,185,129,.8)";
+    ctx.fillRect(80, H - 16, 10, 10);
+    ctx.fillText("Short yandı", 94, H - 7);
+  });
 }
 
 function setupAnalyzeModal() {
@@ -2937,6 +3321,9 @@ function init() {
 
   // Timeline tick: every 1 second (= 1 bucket)
   tlIv = setInterval(timelineTick, TL_BUCKET_MS);
+
+  // LPL proximity kontrolü — her 5 saniyede bir
+  setInterval(checkLPLProximity, 5000);
 
   window.addEventListener("beforeunload", () => {
     clearInterval(bufIv); clearInterval(tlIv);
