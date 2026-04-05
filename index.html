@@ -124,10 +124,10 @@
     .stat-card:last-child { border-right: none; }
     .stat-emoji { font-size: 1rem; line-height: 1; display: block; }
     .stat-lbl {
-      font-size: .58rem; font-weight: 600; color: var(--text3);
+      font-size: .72rem; font-weight: 600; color: var(--text3);
       text-transform: uppercase; letter-spacing: .2px; line-height: 1.1;
     }
-    .stat-num { font-size: .88rem; font-weight: 700; line-height: 1.2; }
+    .stat-num { font-size: 1rem; font-weight: 700; line-height: 1.2; }
     .stat-num.vol   { color: var(--purple); }
     .stat-num.lon   { color: var(--long); }
     .stat-num.sho   { color: var(--short); }
@@ -151,8 +151,15 @@
       font-size: .75rem; font-weight: 700; color: var(--text3); margin-top: 3px;
     }
 
-    /* ---- WHALE BANNER — kaldırıldı ---- */
-    .whale-banner { display: none !important; }
+    /* ---- WHALE BANNER ---- */
+    .whale-banner {
+      display: none; margin: 4px 8px 0;
+      background: linear-gradient(90deg, var(--whale-l), #fff9e6);
+      border: 2px solid var(--whale); border-radius: var(--r-sm);
+      padding: 7px 12px; align-items: center; gap: 8px;
+      flex-shrink: 0;
+    }
+    .whale-banner.show { display: flex; }
 
     /* ---- PAGES ---- */
     .pages { flex: 1; overflow: hidden; position: relative; min-height: 0; }
@@ -267,6 +274,7 @@
       border-left: 5px solid;
       box-shadow: 0 2px 10px rgba(168,85,247,.08);
       transition: transform .12s;
+      cursor: pointer;
     }
     .liq-row:active { transform: scale(.985); }
 
@@ -335,8 +343,8 @@
 
     /* zaman damgası — coin adının altında, sola yaslanmış */
     .row-ts {
-      font-size: .92rem; font-weight: 700;
-      color: var(--text3); margin-top: 3px;
+      font-size: .95rem; font-weight: 700;
+      color: var(--text); margin-top: 3px;
     }
 
     /* col 4 — links */
@@ -709,6 +717,16 @@
       .stat-num { font-size: .8rem; }
       .row-ts { font-size: .82rem; }
     }
+
+    /* ---- STATUS BADGE ---- */
+    .status-badge {
+      display: inline-block; font-size: .62rem; font-weight: 700;
+      padding: 1px 6px; border-radius: 20px; margin-left: 4px;
+      vertical-align: middle;
+    }
+    .cascade-b { background: var(--long-l); color: var(--long); }
+    .warn-b { background: var(--whale-l); color: var(--whale); }
+    .whale-b { background: var(--whale-l); color: var(--whale); }
   </style>
 </head>
 <body>
@@ -890,6 +908,17 @@
               <button class="sort-btn" id="sortSize">&#x1F4B8; Buyukten Kucuge</button>
             </div>
           </div>
+
+          <div class="inp-label" style="margin-top:14px">Zaman Aralığı</div>
+          <div class="filter-chip-group" id="timeChips">
+            <button class="chip active" data-time="0">⏰ Hepsi</button>
+            <button class="chip" data-time="60">1 dk</button>
+            <button class="chip" data-time="300">5 dk</button>
+            <button class="chip" data-time="900">15 dk</button>
+            <button class="chip" data-time="3600">1 saat</button>
+          </div>
+
+          <button id="exportCsvBtn" style="width:100%;margin-top:14px;background:var(--short-l);border:2px solid var(--short);border-radius:var(--r-pill);padding:12px;font-family:'Fredoka',sans-serif;font-size:.9rem;font-weight:700;color:var(--short);cursor:pointer">📥 CSV İndir</button>
         </div>
 
         <div class="a-card" style="margin-top:8px">
@@ -1015,7 +1044,6 @@
 /* ═══════════════════ CONFIG ═══════════════════ */
 const WS_URL       = "wss://fstream.binance.com/ws/!forceOrder@arr";
 const MAX_ITEMS    = 200;
-const MAX_RC       = 10;
 const TL_BUCKETS   = 60;   // 60 buckets
 const TL_BUCKET_MS = 1000; // each bucket = 1 second  => 60s window
 const BUF_MS       = 300;  // flush buffer every 300ms
@@ -1031,12 +1059,14 @@ let lastChart = 0;
 let fAmt     = 0;
 let fSide    = "all";
 let fSym     = "";
+let fTime    = 0;
 let sortMode = "time";
 let paused   = false;
 let unread   = 0;
 let fTmr     = null;
 let bufIv    = null;
 let tlIv     = null;
+let lastActBar = 0;
 
 // Activity: accumulate absolute USD volume per bar slot
 let actData  = Array(ACT_BARS).fill(null).map(() => ({ vol: 0, side: 0 }));
@@ -1064,7 +1094,7 @@ try {
 const saveCfg = () => { try { localStorage.setItem("lv3_cfg", JSON.stringify(cfg)); } catch(e) {} };
 
 /* ═══════════════════ FILTER STATE (kalıcı) ═══════════════════ */
-let filterState = { amt: 0, side: "all", sym: "", sort: "time", customAmt: "" };
+let filterState = { amt: 0, side: "all", sym: "", sort: "time", customAmt: "", time: 0 };
 try {
   const fs = localStorage.getItem("lv3_filters");
   if (fs) filterState = Object.assign(filterState, JSON.parse(fs));
@@ -1074,9 +1104,10 @@ fAmt     = filterState.amt;
 fSide    = filterState.side;
 fSym     = filterState.sym;
 sortMode = filterState.sort;
+fTime    = filterState.time || 0;
 const saveFilters = () => {
   try {
-    const fs = { amt: fAmt, side: fSide, sym: fSym, sort: sortMode,
+    const fs = { amt: fAmt, side: fSide, sym: fSym, sort: sortMode, time: fTime,
                  customAmt: document.getElementById("customAmt") ? document.getElementById("customAmt").value : "" };
     localStorage.setItem("lv3_filters", JSON.stringify(fs));
   } catch(e) {}
@@ -1330,71 +1361,6 @@ async function getMemoryStats(symbol) {
     oldest: recs[0] ? recs[0].time : null
   };
 }
-// Likit anındaki fiyatı kaydeder, 30sn/1dk/3dk/5dk sonra delta gösterir + hafızaya yazar
-const deltaMap = new Map();
-
-// İstek kuyruğu — aynı anda max 3 istek
-let _fetchQueue = 0;
-const MAX_CONCURRENT = 3;
-const _fetchWaiters = [];
-
-function acquireFetch() {
-  return new Promise(resolve => {
-    if (_fetchQueue < MAX_CONCURRENT) { _fetchQueue++; resolve(); }
-    else _fetchWaiters.push(resolve);
-  });
-}
-function releaseFetch() {
-  _fetchQueue--;
-  if (_fetchWaiters.length) { _fetchQueue++; _fetchWaiters.shift()(); }
-}
-
-async function fetchPriceFresh(symbol) {
-  await acquireFetch();
-  try {
-    const r = await fetch("https://fapi.binance.com/fapi/v1/ticker/price?symbol=" + symbol);
-    if (!r.ok) { releaseFetch(); return null; }
-    const d = await r.json();
-    const p = parseFloat(d.price);
-    priceCache.set(symbol, { price: p, ts: Date.now() });
-    releaseFetch();
-    return p;
-  } catch(e) { releaseFetch(); return null; }
-}
-
-function scheduleDelta(symbol, entryPrice, elId, item) {
-  if (!entryPrice || entryPrice <= 0) return;
-  deltaMap.set(elId, { symbol, entryPrice, elId, item });
-  const deltas = {};
-
-  const checkAt = (ms, key, updateUI) => {
-    setTimeout(async () => {
-      const p = await fetchPriceFresh(symbol);
-      if (!p) return;
-      const pct = ((p - entryPrice) / entryPrice) * 100;
-      deltas[key] = pct;
-      if (updateUI) {
-        const sign = pct >= 0 ? "+" : "";
-        const arrow = pct >= 0 ? "📈" : "📉";
-        const txt = arrow + " " + sign + pct.toFixed(2) + "%";
-        const cls = "delta-tag " + (pct >= 0 ? "delta-up" : "delta-dn");
-        if (item) { item._delta = txt; item._deltaCls = cls; }
-        const el = document.getElementById(elId);
-        if (el) { el.textContent = txt; el.className = cls; }
-      }
-      if (key === "d5m") {
-        deltaMap.delete(elId);
-        addMemoryRecord(symbol, item ? item.side : "?", item ? item.valueUSD : 0, deltas);
-      }
-    }, ms);
-  };
-
-  checkAt(30000,  "d30s", true);
-  checkAt(60000,  "d1m",  false);
-  checkAt(180000, "d3m",  false);
-  checkAt(300000, "d5m",  false);
-}
-
 /* ═══════════════════ DOM REFS ═══════════════════ */
 const $ = id => document.getElementById(id);
 const D = {
@@ -1640,6 +1606,10 @@ function renderFeed() {
     const q = fSym.toUpperCase();
     fl = fl.filter(i => base(i.symbol).toUpperCase().includes(q));
   }
+  if (fTime > 0) {
+    const cutoff = Date.now() - fTime * 1000;
+    fl = fl.filter(i => i.time > cutoff);
+  }
 
   // sort
   if (sortMode === "size") fl.sort((a,b) => b.valueUSD - a.valueUSD);
@@ -1666,7 +1636,7 @@ function renderFeed() {
   }
 
   const frag = document.createDocumentFragment();
-  fl.forEach(item => {
+  fl.forEach((item, idx) => {
     const isL = item.side === "SELL";
     const isW = cfg.whale && item.valueUSD >= cfg.whaleSz;
     const b   = base(item.symbol);
@@ -1681,14 +1651,25 @@ function renderFeed() {
 
     const row = document.createElement("div");
     row.className = rowCls;
-    const deltaId = "delta_" + item.symbol + "_" + item.time;
+    row.dataset.symbol = item.symbol;
+    row.dataset.itemIdx = items.indexOf(item);
     const cascadeInfo = item._cascade || { type:"normal", count:1, longCount:0, shortCount:0 };
     const sig = getSignalComment(item, cascadeInfo);
+
+    // Status badge
+    let statusBadge = "";
+    if (cascadeInfo.type === "cascade") {
+      statusBadge = '<span class="status-badge cascade-b">⚡CASCADE</span>';
+    } else if (cascadeInfo.type === "warning") {
+      statusBadge = '<span class="status-badge warn-b">⚠️' + cascadeInfo.count + 'x</span>';
+    } else if (isW) {
+      statusBadge = '<span class="status-badge whale-b">🐋</span>';
+    }
 
     row.innerHTML =
       '<div class="coin-avatar ' + avCls + '">' + coinHTML(item.symbol) + '</div>' +
       '<div class="sym-col">' +
-        '<div class="sym-name">' + b + '<span class="sym-perp">PERP</span>' + sig.badge + '</div>' +
+        '<div class="sym-name">' + b + '<span class="sym-perp">PERP</span>' + statusBadge + '</div>' +
         '<div class="sym-side" style="color:' + color + '">' +
           sideIcon + ' ' + sideStr +
           (isW ? '<span class="whale-tag">BALiNA</span>' : '') +
@@ -1697,8 +1678,7 @@ function renderFeed() {
       '</div>' +
       '<div class="val-col">' +
         '<div class="usd-val" style="color:' + color + '">' + fmt(item.valueUSD) + '</div>' +
-        '<div class="price-tag" id="px_' + item.symbol + '_' + item.time + '">...</div>' +
-        '<div class="' + (item._deltaCls || "delta-tag delta-wait") + '" id="' + deltaId + '">' + (item._delta || "⏳ 30s") + '</div>' +
+        '<div class="price-tag">' + fmtPrice(item.price) + '</div>' +
       '</div>' +
       '<div class="links">' +
         '<a class="ex-link" href="' + tv + '" target="_blank" rel="noopener">TV</a>' +
@@ -1706,28 +1686,7 @@ function renderFeed() {
         '<a class="ex-link" href="' + mx + '" target="_blank" rel="noopener">MX</a>' +
       '</div>';
 
-    // Sinyal yorum kutusu — kartın altında, tam genişlik
-    const sigBox = document.createElement("div");
-    sigBox.className = "signal-box " + sig.cls;
-    sigBox.innerHTML =
-      '<div class="signal-main">' + sig.main + '</div>' +
-      '<div class="signal-hint">' + sig.hint + '</div>' +
-      '<button class="analyze-btn" data-symbol="' + item.symbol + '">🔍 ' + b + ' Hafıza Analizi</button>';
-
-    // Wrapper — kart + yorum kutusu birlikte
-    const wrapper = document.createElement("div");
-    wrapper.appendChild(row);
-    wrapper.appendChild(sigBox);
-    frag.appendChild(wrapper);
-
-    // Anlık fiyatı göster
-    const priceEl = row.querySelector('.price-tag');
-    fetchPrice(item.symbol).then(p => {
-      if (priceEl) priceEl.textContent = fmtPrice(p);
-    });
-
-    // 30 saniye sonra delta hesapla — sadece $1K+ likit için
-    if (!item._delta && item.valueUSD >= 1000) scheduleDelta(item.symbol, item.price, deltaId, item);
+    frag.appendChild(row);
   });
 
   D.feedList.innerHTML = "";
@@ -1900,7 +1859,6 @@ function initCharts() {
 /* ═══════════════════ WEBSOCKET ═══════════════════ */
 function connect() {
   if (ws) { try { ws.close(); } catch(e) {} }
-  if (rc >= MAX_RC) { D.wsSt.textContent = "BASARISIZ"; D.led.classList.remove("live"); return; }
   ws = new WebSocket(WS_URL);
   ws.onopen = () => { D.led.classList.add("live"); D.wsSt.textContent = "CANLI"; rc = 0; };
   ws.onmessage = e => {
@@ -1914,7 +1872,8 @@ function connect() {
   };
   ws.onclose = () => {
     D.led.classList.remove("live");
-    const delay = Math.min(5000, 1000 * (++rc));
+    rc++;
+    const delay = rc < 10 ? Math.min(5000, 1000 * rc) : Math.min(120000, 30000 * Math.pow(2, rc - 10));
     D.wsSt.textContent = "RETRY " + rc;
     setTimeout(connect, delay);
   };
@@ -1957,7 +1916,11 @@ function timelineTick() {
     }
   }
 
-  renderActBar();
+  // renderActBar throttle — her 3 saniyede bir
+  if (now - lastActBar >= 3000) {
+    lastActBar = now;
+    renderActBar();
+  }
 }
 
 /* ═══════════════════ FILTERS ═══════════════════ */
@@ -2040,6 +2003,45 @@ function setupFilters() {
     D.sortSize.classList.add("active"); D.sortTime.classList.remove("active");
     saveFilters(); renderFeed();
   });
+
+  // Time chips
+  const timeChipsEl = document.getElementById("timeChips");
+  if (timeChipsEl) {
+    // Kaydedilmiş fTime'ı yansıt
+    if (fTime > 0) {
+      timeChipsEl.querySelectorAll("[data-time]").forEach(x => x.classList.remove("active"));
+      const tc = timeChipsEl.querySelector("[data-time='" + fTime + "']");
+      if (tc) tc.classList.add("active");
+    }
+    timeChipsEl.querySelectorAll("[data-time]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        timeChipsEl.querySelectorAll("[data-time]").forEach(x => x.classList.remove("active"));
+        btn.classList.add("active");
+        fTime = parseInt(btn.dataset.time, 10);
+        saveFilters(); renderFeed();
+      });
+    });
+  }
+
+  // CSV export
+  const exportBtn = document.getElementById("exportCsvBtn");
+  if (exportBtn) {
+    exportBtn.addEventListener("click", () => {
+      let fl = items.filter(i => i.valueUSD >= fAmt);
+      if (fSide === "long") fl = fl.filter(i => i.side === "SELL");
+      if (fSide === "short") fl = fl.filter(i => i.side === "BUY");
+      if (fSym.trim()) fl = fl.filter(i => base(i.symbol).toUpperCase().includes(fSym.toUpperCase()));
+      if (fTime > 0) fl = fl.filter(i => i.time > Date.now() - fTime * 1000);
+      fl = fl.slice(0, 1000);
+      const rows = [["Zaman","Coin","Yon","Miktar USD","Fiyat"]];
+      fl.forEach(i => rows.push([new Date(i.time).toISOString(), base(i.symbol), i.side==="SELL"?"LONG":"SHORT", i.valueUSD.toFixed(2), i.price]));
+      const csv = rows.map(r => r.join(",")).join("\n");
+      const a = document.createElement("a");
+      a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+      a.download = "liquidvision_" + Date.now() + ".csv";
+      a.click();
+    });
+  }
 }
 
 /* ═══════════════════ TABS ═══════════════════ */
@@ -2077,86 +2079,402 @@ function setupScroll() {
   });
 }
 
+/* ═══════════════════ AKILLI ANALİZ MOTORU ═══════════════════ */
+
+// Her endpoint için ayrı TTL ile cache
+const _aCache = new Map();
+const _aTTL = { depth: 5000, klines: 30000, funding: 60000, oi: 15000 };
+
+async function _safeFetch(url, key) {
+  const now = Date.now();
+  const cached = _aCache.get(key);
+  if (cached && now - cached.ts < (_aTTL[key.split("_")[0]] || 15000)) return cached.data;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const d = await r.json();
+    _aCache.set(key, { data: d, ts: now });
+    return d;
+  } catch(e) { return null; }
+}
+
+async function fetchMarketData(symbol) {
+  const BASE = "https://fapi.binance.com/fapi/v1";
+  // Paralel — biri başarısız olursa diğerleri devam eder
+  const [depth, klines, funding, oi] = await Promise.allSettled([
+    _safeFetch(`${BASE}/depth?symbol=${symbol}&limit=20`,          `depth_${symbol}`),
+    _safeFetch(`${BASE}/klines?symbol=${symbol}&interval=1m&limit=60`, `klines_${symbol}`),
+    _safeFetch(`${BASE}/fundingRate?symbol=${symbol}&limit=1`,     `funding_${symbol}`),
+    _safeFetch(`${BASE}/openInterest?symbol=${symbol}`,            `oi_${symbol}`)
+  ]);
+  return {
+    depth:   depth.status   === "fulfilled" ? depth.value   : null,
+    klines:  klines.status  === "fulfilled" ? klines.value  : null,
+    funding: funding.status === "fulfilled" ? funding.value : null,
+    oi:      oi.status      === "fulfilled" ? oi.value      : null,
+  };
+}
+
+function analyzeMarketData(symbol, marketData, item, cascadeInfo, memStats) {
+  const { depth, klines, funding, oi } = marketData;
+  const isL = item ? item.side === "SELL" : null; // long yandı mı?
+  const b = base(symbol);
+  const results = [];
+
+  /* ── 1. MOMENTUM ANALİZİ (klines) ── */
+  if (klines && klines.length >= 10) {
+    const last10 = klines.slice(-10);
+    const closes = last10.map(k => parseFloat(k[4]));
+    const opens  = last10.map(k => parseFloat(k[1]));
+    const upCount   = closes.filter((c, i) => c > opens[i]).length;
+    const downCount = 10 - upCount;
+    const priceDelta = ((closes[9] - closes[0]) / closes[0] * 100).toFixed(2);
+    const trend = upCount >= 7 ? "yukarı" : downCount >= 7 ? "aşağı" : "yatay";
+    const trendIcon = trend === "yukarı" ? "📈" : trend === "aşağı" ? "📉" : "➡️";
+    const trendColor = trend === "yukarı" ? "var(--short)" : trend === "aşağı" ? "var(--long)" : "var(--text3)";
+
+    // Likit yönü ile momentum uyuşuyor mu?
+    let uyum = "";
+    if (isL !== null) {
+      const liqDown = isL; // long yandı = fiyat düşüyordu
+      if (liqDown && trend === "aşağı") uyum = " — Likit yönü ile uyumlu, düşüş devam edebilir";
+      else if (!liqDown && trend === "yukarı") uyum = " — Likit yönü ile uyumlu, yükseliş devam edebilir";
+      else if (liqDown && trend === "yukarı") uyum = " — Dikkat: Fiyat yükselirken long yandı, geri dönüş sinyali olabilir";
+      else uyum = " — Dikkat: Fiyat düşerken short yandı, geri dönüş sinyali olabilir";
+    }
+
+    results.push({
+      icon: trendIcon,
+      title: "Momentum",
+      main: `Son 10 mumda fiyat ${priceDelta}% değişti, trend ${trend}`,
+      hint: `10 mumun ${upCount}'i yeşil, ${downCount}'i kırmızı${uyum}`,
+      color: trendColor
+    });
+  }
+
+  /* ── 2. ORDER BOOK DUVAR ANALİZİ (depth) ── */
+  if (depth && depth.bids && depth.asks) {
+    const bids = depth.bids.map(b => ({ price: parseFloat(b[0]), qty: parseFloat(b[1]) }));
+    const asks = depth.asks.map(a => ({ price: parseFloat(a[0]), qty: parseFloat(a[1]) }));
+
+    // En büyük duvarları bul
+    const bigBid = bids.reduce((max, b) => b.qty > max.qty ? b : max, bids[0]);
+    const bigAsk = asks.reduce((max, a) => a.qty > max.qty ? a : max, asks[0]);
+
+    // Toplam alış/satış hacmi
+    const totalBid = bids.reduce((s, b) => s + b.qty * b.price, 0);
+    const totalAsk = asks.reduce((s, a) => s + a.qty * a.price, 0);
+    const bidDom = totalBid > totalAsk;
+
+    results.push({
+      icon: "🧱",
+      title: "Order Book",
+      main: `${bidDom ? "Alış" : "Satış"} baskısı ağır basıyor`,
+      hint: `En büyük alış duvarı: ${fmtPrice(bigBid.price)} (${bigBid.qty.toFixed(1)} adet) | En büyük satış duvarı: ${fmtPrice(bigAsk.price)} (${bigAsk.qty.toFixed(1)} adet)`,
+      color: bidDom ? "var(--short)" : "var(--long)",
+      extra: isL
+        ? `📍 Fiyat düşerse ${fmtPrice(bigBid.price)} seviyesinde büyük alış var — burası destek`
+        : `📍 Fiyat yükselirse ${fmtPrice(bigAsk.price)} seviyesinde büyük satış var — burası direnç`
+    });
+  }
+
+  /* ── 3. FUNDING RATE ── */
+  if (funding && funding.length > 0) {
+    const rate = parseFloat(funding[0].fundingRate) * 100;
+    const rateStr = (rate >= 0 ? "+" : "") + rate.toFixed(4) + "%";
+    let yorumMain, yorumHint, fColor;
+    if (rate > 0.05) {
+      yorumMain = `Funding pozitif (${rateStr}) — long ağır basıyor`;
+      yorumHint = "Çok fazla long pozisyon var. Short squeeze riski düşük, long squeeze riski yüksek.";
+      fColor = "var(--long)";
+    } else if (rate < -0.05) {
+      yorumMain = `Funding negatif (${rateStr}) — short ağır basıyor`;
+      yorumHint = "Çok fazla short pozisyon var. Short squeeze riski yüksek — fiyat ani yükselirse shortlar patlar.";
+      fColor = "var(--short)";
+    } else {
+      yorumMain = `Funding dengeli (${rateStr})`;
+      yorumHint = "Long ve short pozisyonlar dengeli. Net bir baskı yok.";
+      fColor = "var(--text3)";
+    }
+    results.push({ icon: "💸", title: "Funding Rate", main: yorumMain, hint: yorumHint, color: fColor });
+  }
+
+  /* ── 4. OPEN INTEREST ── */
+  if (oi) {
+    const oiVal = parseFloat(oi.openInterest);
+    // OI'yi klines'taki son fiyatla USD'ye çevir
+    const lastPrice = klines ? parseFloat(klines[klines.length - 1][4]) : 0;
+    const oiUSD = oiVal * lastPrice;
+    results.push({
+      icon: "📊",
+      title: "Açık Pozisyon (OI)",
+      main: `Toplam açık pozisyon: ${fmt(oiUSD)}`,
+      hint: "Yüksek OI = piyasada çok pozisyon var = büyük hareket olursa daha fazla likit olur.",
+      color: "var(--purple)"
+    });
+  }
+
+  /* ── 5. CASCADE ANALİZİ (kendi verimiz) ── */
+  if (cascadeInfo && cascadeInfo.count >= 2) {
+    const arr = cascadeMap.get(symbol) || [];
+    const fresh = arr.filter(x => x.time > Date.now() - 60000);
+    if (fresh.length >= 2) {
+      // Hızlanma analizi
+      const times = fresh.map(x => x.time).sort((a,b) => a - b);
+      const gaps = [];
+      for (let i = 1; i < times.length; i++) gaps.push(times[i] - times[i-1]);
+      const avgGap = gaps.reduce((s,g) => s + g, 0) / gaps.length / 1000;
+      const lastGap = gaps[gaps.length - 1] / 1000;
+      const hizlaniyor = lastGap < avgGap * 0.7;
+
+      // Büyüme analizi — items'tan bu coinin son likit büyüklükleri
+      const coinItems = items.filter(i => i.symbol === symbol).slice(0, fresh.length);
+      const buyuyor = coinItems.length >= 2 && coinItems[0].valueUSD > coinItems[1].valueUSD;
+
+      let cascMain = `Son ${fresh.length} likit ${avgGap.toFixed(0)} saniye aralıkla`;
+      let cascHint = "";
+      if (hizlaniyor && buyuyor) {
+        cascMain = "⚡ Likidasyonlar HIZLANIYOR ve BÜYÜYOR";
+        cascHint = `Aralık: ${lastGap.toFixed(0)}sn (ort. ${avgGap.toFixed(0)}sn'den hızlı). Cascade devam edebilir — dikkatli ol.`;
+      } else if (hizlaniyor) {
+        cascHint = `Aralıklar kısalıyor (son: ${lastGap.toFixed(0)}sn). Hız artıyor.`;
+      } else if (buyuyor) {
+        cascHint = "Likit büyüklükleri artıyor. Baskı güçleniyor.";
+      } else {
+        cascHint = `${fresh.length} likit, ortalama ${avgGap.toFixed(0)} saniye aralıkla.`;
+      }
+      results.push({
+        icon: "⚡",
+        title: "Cascade Analizi",
+        main: cascMain,
+        hint: cascHint,
+        color: "var(--long)"
+      });
+    }
+  }
+
+  /* ── 6. HAFIZA SKORU ── */
+  if (memStats) {
+    const side = isL ? memStats.long : memStats.short;
+    if (side && side.d30s && side.d30s.n >= 3) {
+      const up = side.d30s.up;
+      const avg = side.d30s.avg;
+      const sign = avg >= 0 ? "+" : "";
+      let scoreMain, scoreHint, scoreColor;
+      if (up >= 65) {
+        scoreMain = `Geçmişte %${up} geri dönüş olmuş`;
+        scoreHint = `${side.d30s.n} ölçümde 30sn sonra ort. ${sign}${avg.toFixed(2)}% hareket. Scalp fırsatı olabilir.`;
+        scoreColor = "var(--short)";
+      } else if (up <= 35) {
+        scoreMain = `Geçmişte %${100-up} devam etmiş`;
+        scoreHint = `${side.d30s.n} ölçümde 30sn sonra ort. ${sign}${avg.toFixed(2)}% hareket. Trend devam ediyor.`;
+        scoreColor = "var(--long)";
+      } else {
+        scoreMain = `Geçmiş karışık (%${up} geri dönüş)`;
+        scoreHint = `${side.d30s.n} ölçümde net bir pattern yok. Her iki yön de mümkün.`;
+        scoreColor = "var(--text3)";
+      }
+      results.push({ icon: "🧠", title: "Hafıza Skoru", main: scoreMain, hint: scoreHint, color: scoreColor });
+    }
+  }
+
+  return results;
+}
+
+function renderAnalysisResults(results, container) {
+  if (!results.length) {
+    container.innerHTML = '<div style="color:var(--text3);font-size:.85rem;text-align:center;padding:12px">Veri alınamadı</div>';
+    return;
+  }
+  container.innerHTML = results.map(r =>
+    `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:white;border-radius:var(--r-sm);margin-bottom:8px;border-left:4px solid ${r.color}">
+      <div style="font-size:1.3rem;flex-shrink:0">${r.icon}</div>
+      <div style="flex:1">
+        <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:.3px">${r.title}</div>
+        <div style="font-size:.95rem;font-weight:700;color:${r.color};margin-top:2px">${r.main}</div>
+        <div style="font-size:.75rem;color:var(--text3);margin-top:3px;line-height:1.4">${r.hint}</div>
+        ${r.extra ? `<div style="font-size:.78rem;font-weight:700;color:var(--text);margin-top:5px;padding:5px 8px;background:var(--bg);border-radius:8px">${r.extra}</div>` : ""}
+      </div>
+    </div>`
+  ).join("");
+}
+
 /* ═══════════════════ ANALİZ MODAL ═══════════════════ */
-function openAnalyzeModal(symbol) {
+function openAnalyzeModal(symbol, itemIdx) {
   const b = base(symbol);
   const modal = document.getElementById("analyzeModal");
   const title = document.getElementById("modalTitle");
   const body  = document.getElementById("modalBody");
-  title.textContent = "🔍 " + b + " Hafıza Analizi";
-  body.innerHTML = '<div class="mem-empty"><div style="font-size:2rem">⏳</div><div style="margin-top:8px">Veriler yükleniyor...</div></div>';
+  title.textContent = "🔍 " + b + " Analizi";
   modal.classList.remove("hidden");
 
-  getMemoryStats(symbol).then(stats2 => {
-    if (!stats2) {
-      body.innerHTML =
-        '<div class="mem-empty">' +
-        '<div style="font-size:2.5rem;margin-bottom:12px">🧠</div>' +
-        '<div style="font-size:1rem;font-weight:700;color:var(--text)">Henüz yeterli veri yok</div>' +
-        '<div style="font-size:.82rem;margin-top:8px">Bu coin için en az 1 likit 5 dakika önce gerçekleşmiş olmalı.<br>Sistem otomatik öğreniyor — bekle!</div>' +
-        '</div>';
-      return;
-    }
+  // Item bilgisi
+  const item = (itemIdx != null && items[itemIdx] && items[itemIdx].symbol === symbol)
+    ? items[itemIdx]
+    : items.find(i => i.symbol === symbol);
 
-  function renderSide(s, label, color) {
-    if (!s) return '<div style="color:var(--text3);font-size:.85rem;padding:8px 0">' + label + ' için henüz veri yok.</div>';
-    const rows = [
-      { key:"d30s", label:"30 saniye", hint:"Likit sonrası 30 saniyede fiyat ne yaptı?" },
-      { key:"d1m",  label:"1 dakika",  hint:"1 dakika sonra fiyat neredeydi?" },
-      { key:"d3m",  label:"3 dakika",  hint:"3 dakika sonra fiyat neredeydi?" },
-      { key:"d5m",  label:"5 dakika",  hint:"5 dakika sonra fiyat neredeydi?" },
-    ];
-    return rows.map(r => {
-      const d = s[r.key];
-      if (!d || d.n < 1) return "";
-      const avg = d.avg;
-      const up  = d.up;
-      const cls = avg > 0.05 ? "up" : avg < -0.05 ? "dn" : "neut";
-      const sign = avg >= 0 ? "+" : "";
-      const arrow = avg > 0.05 ? "📈" : avg < -0.05 ? "📉" : "➡️";
-      // Yüzde bar
-      const barW = Math.min(100, Math.abs(avg) * 20);
-      const barColor = avg >= 0 ? "var(--short)" : "var(--long)";
-      // Yorum
-      let yorum = "";
-      if (r.key === "d30s") {
-        if (up >= 70) yorum = "Çoğunlukla geri dönüş oluyor — scalp fırsatı olabilir";
-        else if (up <= 30) yorum = "Çoğunlukla devam ediyor — trende katılmak daha mantıklı";
-        else yorum = "Karışık sonuçlar — net bir pattern yok";
-      }
-      return '<div class="mem-stat-row ' + cls + '">' +
-        '<div class="mem-stat-time">' + r.label + '</div>' +
-        '<div class="mem-stat-main">' +
-          '<div class="mem-stat-val" style="color:' + barColor + '">' + arrow + ' Ort. ' + sign + avg.toFixed(2) + '%</div>' +
-          '<div class="mem-stat-hint">' + d.n + ' ölçümde ' + up + '% yukarı gitti' + (yorum ? ' — ' + yorum : '') + '</div>' +
+  const cascadeInfo = (item && item._cascade) || { type:"normal", count:1, longCount:0, shortCount:0 };
+  const sig = item ? getSignalComment(item, cascadeInfo) : null;
+  const isL = item ? item.side === "SELL" : null;
+  const color = isL ? "var(--long)" : "var(--short)";
+
+  // Temel bilgi + sinyal yorumu
+  let infoHtml = "";
+  if (item) {
+    infoHtml =
+      '<div style="background:white;border-radius:var(--r-sm);padding:12px 14px;margin-bottom:12px;border:1.5px solid var(--border)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+          '<span style="font-size:1.1rem;font-weight:700;color:var(--text)">' + b + '</span>' +
+          '<span style="font-size:.85rem;font-weight:700;color:' + color + '">' + (isL ? "📉 Long Yandı" : "📈 Short Yandı") + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:16px;font-size:.85rem;font-weight:600;color:var(--text3)">' +
+          '<span>💰 ' + fmt(item.valueUSD) + '</span>' +
+          '<span>💲 ' + fmtPrice(item.price) + '</span>' +
+          '<span>🕐 ' + tsStr(item.time) + '</span>' +
         '</div>' +
       '</div>';
-    }).join("");
+    if (sig) {
+      infoHtml +=
+        '<div class="signal-box ' + sig.cls + '" style="margin:0 0 12px">' +
+          '<div class="signal-main" style="font-size:1.05rem">' + sig.main + '</div>' +
+          '<div class="signal-hint">' + sig.hint + '</div>' +
+        '</div>';
+    }
   }
 
-  const oldest = stats2.oldest ? new Date(stats2.oldest).toLocaleDateString("tr-TR") : "?";
-
-  body.innerHTML =
-    '<div style="font-size:.78rem;color:var(--text3);margin-bottom:14px">' +
-    '📅 ' + oldest + " tarihinden bu yana " + stats2.total + " likit kaydedildi" +
+  // Anlık analiz bölümü — hemen yükleniyor göster
+  infoHtml +=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      '<div style="font-size:.78rem;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:.3px">🔬 Anlık Piyasa Analizi</div>' +
+      '<div id="analysisAge" style="font-size:.68rem;color:var(--text3)"></div>' +
     '</div>' +
-
-    '<div class="mem-section">' +
-    '<div class="mem-section-title">😢 Long Yandığında Ne Oldu? <span class="mem-count-badge">' + (stats2.long ? stats2.long.count : 0) + ' kayıt</span></div>' +
-    '<div style="font-size:.78rem;color:var(--text3);margin-bottom:8px">Long pozisyon zorla kapandı = fiyat düşmüştü. Sonra ne oldu?</div>' +
-    renderSide(stats2.long, "Long likit", "var(--long)") +
-    '</div>' +
-
-    '<div class="mem-section">' +
-    '<div class="mem-section-title">😤 Short Yandığında Ne Oldu? <span class="mem-count-badge">' + (stats2.short ? stats2.short.count : 0) + ' kayıt</span></div>' +
-    '<div style="font-size:.78rem;color:var(--text3);margin-bottom:8px">Short pozisyon zorla kapandı = fiyat yükselmişti. Sonra ne oldu?</div>' +
-    renderSide(stats2.short, "Short likit", "var(--short)") +
-    '</div>' +
-
-    '<div style="font-size:.72rem;color:var(--text3);text-align:center;margin-top:8px;line-height:1.5">' +
-    '⚠️ Bu veriler geçmiş davranışlara dayanır.<br>Gelecek garantisi vermez. Kendi kararını kendin ver.' +
+    '<div id="analysisContainer"><div style="text-align:center;padding:20px;color:var(--text3)">⏳ Analiz yükleniyor...</div></div>' +
+    '<div style="margin-top:12px">' +
+      '<button id="modalMemBtn" style="width:100%;background:var(--purple-l);border:2px solid var(--border);border-radius:var(--r-pill);padding:10px;font-family:\'Fredoka\',sans-serif;font-size:.9rem;font-weight:700;color:var(--purple);cursor:pointer;margin-bottom:8px">🧠 Hafıza Analizi</button>' +
+      '<div id="modalMemContent"></div>' +
     '</div>';
-  }); // getMemoryStats.then kapanışı
+
+  body.innerHTML = infoHtml;
+
+  // Analiz yükle — paralel fetch
+  let analysisInterval = null;
+  let lastAnalysisTime = 0;
+
+  async function runAnalysis(force = false) {
+    const container = document.getElementById("analysisContainer");
+    const ageEl = document.getElementById("analysisAge");
+    if (!container) return;
+
+    const [marketData, memStats] = await Promise.all([
+      fetchMarketData(symbol),
+      getMemoryStats(symbol)
+    ]);
+
+    lastAnalysisTime = Date.now();
+    if (ageEl) ageEl.textContent = "Az önce güncellendi";
+
+    const results = analyzeMarketData(symbol, marketData, item, cascadeInfo, memStats);
+    renderAnalysisResults(results, container);
+
+    // 10 saniyede bir güncelle (modal açıkken)
+    if (!analysisInterval) {
+      analysisInterval = setInterval(() => {
+        const stillOpen = !document.getElementById("analyzeModal").classList.contains("hidden");
+        if (!stillOpen) { clearInterval(analysisInterval); return; }
+        const age = Math.round((Date.now() - lastAnalysisTime) / 1000);
+        if (ageEl) ageEl.textContent = age + "sn önce";
+        if (age >= 10) runAnalysis(true);
+      }, 1000);
+    }
+  }
+
+  runAnalysis();
+
+  // Modal kapanınca interval temizle
+  const closeBtn = document.getElementById("modalClose");
+  if (closeBtn) {
+    const origClose = closeBtn.onclick;
+    closeBtn.onclick = () => {
+      clearInterval(analysisInterval);
+      document.getElementById("analyzeModal").classList.add("hidden");
+    };
+  }
+
+  // Hafıza analizi butonu
+  const memBtn = document.getElementById("modalMemBtn");
+  if (memBtn) {
+    memBtn.addEventListener("click", () => {
+      const mc = document.getElementById("modalMemContent");
+      if (!mc) return;
+      memBtn.disabled = true;
+      memBtn.textContent = "⏳ Yükleniyor...";
+
+      getMemoryStats(symbol).then(stats2 => {
+        memBtn.style.display = "none";
+        if (!stats2) {
+          mc.innerHTML =
+            '<div class="mem-empty">' +
+            '<div style="font-size:2.5rem;margin-bottom:12px">🧠</div>' +
+            '<div style="font-size:1rem;font-weight:700;color:var(--text)">Henüz yeterli veri yok</div>' +
+            '<div style="font-size:.82rem;margin-top:8px">Bu coin için en az 1 likit 5 dakika önce gerçekleşmiş olmalı.<br>Sistem otomatik öğreniyor — bekle!</div>' +
+            '</div>';
+          return;
+        }
+
+        function renderSide(s, label, color2) {
+          if (!s) return '<div style="color:var(--text3);font-size:.85rem;padding:8px 0">' + label + ' için henüz veri yok.</div>';
+          const rows = [
+            { key:"d30s", label:"30 saniye", hint:"Likit sonrası 30 saniyede fiyat ne yaptı?" },
+            { key:"d1m",  label:"1 dakika",  hint:"1 dakika sonra fiyat neredeydi?" },
+            { key:"d3m",  label:"3 dakika",  hint:"3 dakika sonra fiyat neredeydi?" },
+            { key:"d5m",  label:"5 dakika",  hint:"5 dakika sonra fiyat neredeydi?" },
+          ];
+          return rows.map(r => {
+            const d = s[r.key];
+            if (!d || d.n < 1) return "";
+            const avg = d.avg;
+            const up  = d.up;
+            const cls = avg > 0.05 ? "up" : avg < -0.05 ? "dn" : "neut";
+            const sign = avg >= 0 ? "+" : "";
+            const arrow = avg > 0.05 ? "📈" : avg < -0.05 ? "📉" : "➡️";
+            const barColor = avg >= 0 ? "var(--short)" : "var(--long)";
+            let yorum = "";
+            if (r.key === "d30s") {
+              if (up >= 70) yorum = "Çoğunlukla geri dönüş oluyor — scalp fırsatı olabilir";
+              else if (up <= 30) yorum = "Çoğunlukla devam ediyor — trende katılmak daha mantıklı";
+              else yorum = "Karışık sonuçlar — net bir pattern yok";
+            }
+            return '<div class="mem-stat-row ' + cls + '">' +
+              '<div class="mem-stat-time">' + r.label + '</div>' +
+              '<div class="mem-stat-main">' +
+                '<div class="mem-stat-val" style="color:' + barColor + '">' + arrow + ' Ort. ' + sign + avg.toFixed(2) + '%</div>' +
+                '<div class="mem-stat-hint">' + d.n + ' ölçümde ' + up + '% yukarı gitti' + (yorum ? ' — ' + yorum : '') + '</div>' +
+              '</div>' +
+            '</div>';
+          }).join("");
+        }
+
+        const oldest = stats2.oldest ? new Date(stats2.oldest).toLocaleDateString("tr-TR") : "?";
+        mc.innerHTML =
+          '<div style="font-size:.78rem;color:var(--text3);margin-bottom:14px">' +
+          '📅 ' + oldest + " tarihinden bu yana " + stats2.total + " likit kaydedildi" +
+          '</div>' +
+          '<div class="mem-section">' +
+          '<div class="mem-section-title">😢 Long Yandığında Ne Oldu? <span class="mem-count-badge">' + (stats2.long ? stats2.long.count : 0) + ' kayıt</span></div>' +
+          '<div style="font-size:.78rem;color:var(--text3);margin-bottom:8px">Long pozisyon zorla kapandı = fiyat düşmüştü. Sonra ne oldu?</div>' +
+          renderSide(stats2.long, "Long likit", "var(--long)") +
+          '</div>' +
+          '<div class="mem-section">' +
+          '<div class="mem-section-title">😤 Short Yandığında Ne Oldu? <span class="mem-count-badge">' + (stats2.short ? stats2.short.count : 0) + ' kayıt</span></div>' +
+          '<div style="font-size:.78rem;color:var(--text3);margin-bottom:8px">Short pozisyon zorla kapandı = fiyat yükselmişti. Sonra ne oldu?</div>' +
+          renderSide(stats2.short, "Short likit", "var(--short)") +
+          '</div>' +
+          '<div style="font-size:.72rem;color:var(--text3);text-align:center;margin-top:8px;line-height:1.5">' +
+          '⚠️ Bu veriler geçmiş davranışlara dayanır.<br>Gelecek garantisi vermez. Kendi kararını kendin ver.' +
+          '</div>';
+      });
+    });
+  }
 }
 
 function setupAnalyzeModal() {
@@ -2166,10 +2484,13 @@ function setupAnalyzeModal() {
   document.getElementById("analyzeModal").addEventListener("click", e => {
     if (e.target === e.currentTarget) e.currentTarget.classList.add("hidden");
   });
-  // Delegated click — analiz butonları
   document.getElementById("feedList").addEventListener("click", e => {
-    const btn = e.target.closest(".analyze-btn");
-    if (btn) openAnalyzeModal(btn.dataset.symbol);
+    const row = e.target.closest(".liq-row");
+    if (row) {
+      // link tıklamalarını geç
+      if (e.target.closest("a")) return;
+      openAnalyzeModal(row.dataset.symbol, row.dataset.itemIdx != null ? parseInt(row.dataset.itemIdx, 10) : null);
+    }
   });
 }
 
