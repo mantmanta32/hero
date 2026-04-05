@@ -320,6 +320,10 @@
     /* col 3 — value, centered */
     .val-col { text-align: right; padding-right: 8px; }
     .usd-val { font-size: 1rem; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+    .price-tag {
+      font-size: .78rem; font-weight: 600; color: var(--text3);
+      margin-top: 3px; white-space: nowrap;
+    }
 
     /* zaman damgası — coin adının altında, sola yaslanmış */
     .row-ts {
@@ -578,6 +582,7 @@
     <div style="flex:1;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none">
       <span style="font-size:.75rem;font-weight:700;color:var(--text3);white-space:nowrap;align-self:center">🔥 LiquidVision</span>
     </div>
+    <button id="clearFeedBtn" title="Listeyi Temizle" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:4px 6px;border-radius:8px;color:var(--text3);transition:.15s;flex-shrink:0;line-height:1;">🗑️</button>
   </div>
 
   <!-- STATS -->
@@ -870,6 +875,47 @@ try {
 } catch(e) {}
 const saveCfg = () => { try { localStorage.setItem("lv3_cfg", JSON.stringify(cfg)); } catch(e) {} };
 
+/* ═══════════════════ FILTER STATE (kalıcı) ═══════════════════ */
+let filterState = { amt: 0, side: "all", sym: "", sort: "time", customAmt: "" };
+try {
+  const fs = localStorage.getItem("lv3_filters");
+  if (fs) filterState = Object.assign(filterState, JSON.parse(fs));
+} catch(e) {}
+// Kaydedilmiş filtre değerlerini state'e yükle
+fAmt     = filterState.amt;
+fSide    = filterState.side;
+fSym     = filterState.sym;
+sortMode = filterState.sort;
+const saveFilters = () => {
+  filterState = { amt: fAmt, side: fSide, sym: fSym, sort: sortMode, customAmt: D.customAmt ? D.customAmt.value : "" };
+  try { localStorage.setItem("lv3_filters", JSON.stringify(filterState)); } catch(e) {}
+};
+
+/* ═══════════════════ PRICE CACHE ═══════════════════ */
+const priceCache = new Map(); // symbol -> { price, ts }
+const PRICE_TTL  = 8000;     // 8 saniye cache
+
+async function fetchPrice(symbol) {
+  const now = Date.now();
+  const cached = priceCache.get(symbol);
+  if (cached && now - cached.ts < PRICE_TTL) return cached.price;
+  try {
+    const r = await fetch("https://fapi.binance.com/fapi/v1/ticker/price?symbol=" + symbol);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const p = parseFloat(d.price);
+    priceCache.set(symbol, { price: p, ts: Date.now() });
+    return p;
+  } catch(e) { return null; }
+}
+
+function fmtPrice(p) {
+  if (!p) return "—";
+  if (p >= 1000) return "$" + p.toLocaleString("en-US", { maximumFractionDigits: 1 });
+  if (p >= 1)    return "$" + p.toFixed(3);
+  return "$" + p.toFixed(5);
+}
+
 /* ═══════════════════ DOM REFS ═══════════════════ */
 const $ = id => document.getElementById(id);
 const D = {
@@ -910,6 +956,7 @@ const D = {
   mktDensity  : $("mktDensity"),
   mktInsights : $("mktInsights"),
   feedBadge   : $("feedBadge"),
+  clearFeedBtn: $("clearFeedBtn"),
   pages: {
     feed      : $("tab-feed"),
     analytics : $("tab-analytics"),
@@ -1107,12 +1154,20 @@ function renderFeed() {
       '</div>' +
       '<div class="val-col">' +
         '<div class="usd-val" style="color:' + color + '">' + fmt(item.valueUSD) + '</div>' +
+        '<div class="price-tag" id="px_' + item.symbol + '_' + item.time + '">...</div>' +
       '</div>' +
       '<div class="links">' +
         '<a class="ex-link" href="' + tv + '" target="_blank" rel="noopener">TV</a>' +
         '<a class="ex-link" href="' + by + '" target="_blank" rel="noopener">BY</a>' +
         '<a class="ex-link" href="' + mx + '" target="_blank" rel="noopener">MX</a>' +
       '</div>';
+
+    // Fiyatı async yükle
+    const priceEl = row.querySelector('.price-tag');
+    fetchPrice(item.symbol).then(p => {
+      if (priceEl) priceEl.textContent = fmtPrice(p);
+    });
+
     frag.appendChild(row);
   });
 
@@ -1348,15 +1403,35 @@ function timelineTick() {
 
 /* ═══════════════════ FILTERS ═══════════════════ */
 function setupFilters() {
+  // Kaydedilmiş filtreleri UI'a yansıt
+  if (filterState.amt > 0) {
+    const chip = document.querySelector("[data-filter='amount'][data-val='" + filterState.amt + "']");
+    if (chip) {
+      document.querySelectorAll("[data-filter='amount']").forEach(x => x.classList.remove("active"));
+      chip.classList.add("active");
+    } else if (D.customAmt) {
+      D.customAmt.value = filterState.customAmt || filterState.amt;
+      document.querySelectorAll("[data-filter='amount']").forEach(x => x.classList.remove("active"));
+    }
+  }
+  if (filterState.side !== "all") {
+    document.querySelectorAll("[data-filter='side']").forEach(x => x.classList.remove("active","long-on","short-on"));
+    const sc = document.querySelector("[data-filter='side'][data-side='" + filterState.side + "']");
+    if (sc) sc.classList.add(filterState.side === "long" ? "long-on" : "short-on");
+  }
+  if (filterState.sym && D.symFilter) D.symFilter.value = filterState.sym;
+  if (filterState.sort === "size" && D.sortSize) {
+    D.sortSize.classList.add("active"); D.sortTime.classList.remove("active");
+  }
+
   // Amount chips
   document.querySelectorAll("[data-filter='amount']").forEach(btn => {
     btn.addEventListener("click", () => {
       document.querySelectorAll("[data-filter='amount']").forEach(x => x.classList.remove("active"));
       btn.classList.add("active");
       fAmt = parseInt(btn.dataset.val, 10);
-      // clear custom input without triggering its listener
       D.customAmt.value = "";
-      renderFeed();
+      saveFilters(); renderFeed();
     });
   });
 
@@ -1370,42 +1445,41 @@ function setupFilters() {
       if (fSide === "long")       btn.classList.add("long-on");
       else if (fSide === "short") btn.classList.add("short-on");
       else                        btn.classList.add("active");
-      renderFeed();
+      saveFilters(); renderFeed();
     });
   });
 
-  // Custom amount — also deactivates amount chips
+  // Custom amount
   D.customAmt.addEventListener("input", e => {
     const v = parseFloat(e.target.value);
     if (!isNaN(v) && v >= 0) {
       fAmt = v;
       document.querySelectorAll("[data-filter='amount']").forEach(x => x.classList.remove("active"));
     } else if (e.target.value === "") {
-      // reset to 0 and re-activate ALL chip
       fAmt = 0;
       const allChip = document.querySelector("[data-filter='amount'][data-val='0']");
       if (allChip) allChip.classList.add("active");
     }
-    renderFeed();
+    saveFilters(); renderFeed();
   });
 
   // Symbol filter (debounced)
   D.symFilter.addEventListener("input", e => {
     fSym = e.target.value;
     clearTimeout(fTmr);
-    fTmr = setTimeout(renderFeed, 300);
+    fTmr = setTimeout(() => { saveFilters(); renderFeed(); }, 300);
   });
 
   // Sort buttons
   D.sortTime.addEventListener("click", () => {
     sortMode = "time";
     D.sortTime.classList.add("active"); D.sortSize.classList.remove("active");
-    renderFeed();
+    saveFilters(); renderFeed();
   });
   D.sortSize.addEventListener("click", () => {
     sortMode = "size";
     D.sortSize.classList.add("active"); D.sortTime.classList.remove("active");
-    renderFeed();
+    saveFilters(); renderFeed();
   });
 }
 
@@ -1509,6 +1583,14 @@ function setupSettings() {
     if (donutChart) { donutChart.data.datasets[0].data = [0,0]; donutChart.update("none"); }
     updateStatsUI(); renderFeed(); renderActBar();
   });
+
+  // Topbar temizle butonu — sadece listeyi temizler, stats kalır
+  if (D.clearFeedBtn) {
+    D.clearFeedBtn.addEventListener("click", () => {
+      items = []; buffer = [];
+      renderFeed();
+    });
+  }
 }
 
 /* ═══════════════════ INIT ═══════════════════ */
