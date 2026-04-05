@@ -638,6 +638,70 @@
     .mc-text { font-size: .88rem; font-weight: 600; color: var(--text); line-height: 1.4; }
     .mc-hint { font-size: .72rem; color: var(--text3); margin-top: 2px; }
 
+    /* ---- ANALİZ MODAL ---- */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(59,31,94,.55); backdrop-filter: blur(4px);
+      display: flex; align-items: flex-end; justify-content: center;
+      padding: 0 0 calc(var(--bot-h) + var(--safe-b)) 0;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal-box {
+      background: var(--bg); border-radius: var(--r) var(--r) 0 0;
+      width: 100%; max-height: 80vh; overflow-y: auto;
+      padding: 20px 16px 24px;
+      box-shadow: 0 -8px 40px rgba(168,85,247,.25);
+      animation: slideUp .3s cubic-bezier(.2,.9,.4,1.1);
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+    }
+    .modal-title { font-size: 1.3rem; font-weight: 700; color: var(--text); }
+    .modal-close {
+      font-size: 1.4rem; cursor: pointer; color: var(--text3);
+      background: var(--purple-l); border: none; border-radius: 50%;
+      width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    }
+    .mem-section { margin-bottom: 16px; }
+    .mem-section-title {
+      font-size: .72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .4px; color: var(--text3); margin-bottom: 8px;
+    }
+    .mem-stat-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; background: white;
+      border-radius: var(--r-sm); margin-bottom: 6px;
+      border-left: 4px solid var(--border);
+    }
+    .mem-stat-row.up   { border-left-color: var(--short); }
+    .mem-stat-row.dn   { border-left-color: var(--long); }
+    .mem-stat-row.neut { border-left-color: var(--purple); }
+    .mem-stat-time { font-size: .78rem; font-weight: 700; color: var(--text3); min-width: 36px; }
+    .mem-stat-main { flex: 1; }
+    .mem-stat-val  { font-size: 1rem; font-weight: 700; }
+    .mem-stat-hint { font-size: .72rem; color: var(--text3); margin-top: 1px; }
+    .mem-stat-bar  { font-size: .72rem; font-weight: 700; }
+    .mem-empty { text-align: center; padding: 24px; color: var(--text3); font-size: .9rem; }
+    .mem-count-badge {
+      display: inline-block; background: var(--purple-l); color: var(--purple);
+      font-size: .72rem; font-weight: 700; padding: 2px 8px;
+      border-radius: 20px; margin-left: 6px;
+    }
+    /* analiz butonu kart üzerinde */
+    .analyze-btn {
+      background: var(--purple-l); border: 1.5px solid var(--border);
+      border-radius: var(--r-pill); padding: 4px 10px;
+      font-family: 'Fredoka', sans-serif; font-size: .75rem; font-weight: 700;
+      color: var(--purple); cursor: pointer; transition: .15s;
+      white-space: nowrap; margin-top: 4px;
+    }
+    .analyze-btn:active { background: var(--purple); color: white; }
+
     /* ---- RESPONSIVE ---- */
     @media (max-width: 360px) {
       .liq-row { grid-template-columns: 40px 1fr auto auto; }
@@ -714,6 +778,17 @@
         <div class="toast-msg" id="toastMsg">&#x2014;</div>
       </div>
       <div class="toast-close" id="toastClose">&#x2715;</div>
+    </div>
+  </div>
+
+  <!-- ANALİZ MODAL -->
+  <div class="modal-overlay hidden" id="analyzeModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">🔍 Coin Analizi</div>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+      <div id="modalBody"></div>
     </div>
   </div>
 
@@ -1178,35 +1253,53 @@ function renderMarketComment() {
   ).join("");
 }
 
-/* ═══════════════════ COİN HAFIZASI ═══════════════════ */
-// localStorage'da coin bazlı likit davranış hafızası
-// Format: { [symbol]: { records: [{time, side, val, d30s, d1m, d3m, d5m}, ...] } }
-const MEMORY_KEY  = "lv3_memory";
-const MEMORY_DAYS = 7;   // 7 günden eski kayıtları sil
-const MEMORY_MAX  = 100; // coin başına max kayıt
+/* ═══════════════════ COİN HAFIZASI — Firebase ═══════════════════ */
+const FB_URL      = "https://liqidasyon-default-rtdb.europe-west1.firebasedatabase.app";
+const MEMORY_DAYS = 7;
+const MEMORY_MAX  = 100;
 
-function loadMemory() {
-  try { return JSON.parse(localStorage.getItem(MEMORY_KEY) || "{}"); } catch(e) { return {}; }
+// In-memory cache — Firebase'den bir kez okur, sonra cache'den kullanır
+const memCache = {};
+let memCacheLoaded = false;
+
+async function loadMemory() {
+  if (memCacheLoaded) return memCache;
+  try {
+    const r = await fetch(FB_URL + "/memory.json");
+    if (r.ok) {
+      const d = await r.json();
+      if (d) Object.assign(memCache, d);
+    }
+  } catch(e) {}
+  memCacheLoaded = true;
+  return memCache;
 }
-function saveMemory(mem) {
-  try { localStorage.setItem(MEMORY_KEY, JSON.stringify(mem)); } catch(e) {}
+
+async function saveMemoryCoin(key, data) {
+  try {
+    await fetch(FB_URL + "/memory/" + key + ".json", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+  } catch(e) {}
 }
-function addMemoryRecord(symbol, side, val, deltas) {
-  const mem = loadMemory();
+
+async function addMemoryRecord(symbol, side, val, deltas) {
+  const mem = await loadMemory();
   const key = base(symbol);
   if (!mem[key]) mem[key] = { records: [] };
   const cutoff = Date.now() - MEMORY_DAYS * 86400000;
-  // Eski kayıtları temizle
   mem[key].records = mem[key].records.filter(r => r.time > cutoff);
   mem[key].records.push({ time: Date.now(), side, val, ...deltas });
-  // Max kayıt sınırı
   if (mem[key].records.length > MEMORY_MAX) {
     mem[key].records = mem[key].records.slice(-MEMORY_MAX);
   }
-  saveMemory(mem);
+  saveMemoryCoin(key, mem[key]); // async, beklemiyoruz
 }
-function getMemoryStats(symbol) {
-  const mem = loadMemory();
+
+async function getMemoryStats(symbol) {
+  const mem = await loadMemory();
   const key = base(symbol);
   if (!mem[key] || !mem[key].records.length) return null;
   const recs = mem[key].records;
@@ -1237,36 +1330,51 @@ function getMemoryStats(symbol) {
     oldest: recs[0] ? recs[0].time : null
   };
 }
-// Likit anındaki fiyatı kaydeder, 30sn sonra delta gösterir
-// deltaMap: itemKey -> { symbol, entryPrice, elId }
+// Likit anındaki fiyatı kaydeder, 30sn/1dk/3dk/5dk sonra delta gösterir + hafızaya yazar
 const deltaMap = new Map();
+
+async function fetchPriceFresh(symbol) {
+  try {
+    const r = await fetch("https://fapi.binance.com/fapi/v1/ticker/price?symbol=" + symbol);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const p = parseFloat(d.price);
+    priceCache.set(symbol, { price: p, ts: Date.now() });
+    return p;
+  } catch(e) { return null; }
+}
 
 function scheduleDelta(symbol, entryPrice, elId, item) {
   if (!entryPrice || entryPrice <= 0) return;
-  const key = elId;
-  deltaMap.set(key, { symbol, entryPrice, elId, item });
-  setTimeout(async () => {
-    const entry = deltaMap.get(key);
-    if (!entry) return;
-    deltaMap.delete(key);
-    try {
-      const r = await fetch("https://fapi.binance.com/fapi/v1/ticker/price?symbol=" + entry.symbol);
-      if (!r.ok) return;
-      const d = await r.json();
-      const nowPrice = parseFloat(d.price);
-      priceCache.set(entry.symbol, { price: nowPrice, ts: Date.now() });
-      const pct = ((nowPrice - entry.entryPrice) / entry.entryPrice) * 100;
-      const sign = pct >= 0 ? "+" : "";
-      const arrow = pct >= 0 ? "📈" : "📉";
-      const txt = arrow + " " + sign + pct.toFixed(2) + "%";
-      const cls = "delta-tag " + (pct >= 0 ? "delta-up" : "delta-dn");
-      // item objesine kaydet — re-render'da da görünsün
-      if (entry.item) { entry.item._delta = txt; entry.item._deltaCls = cls; }
-      // DOM'da hâlâ varsa direkt güncelle
-      const el = document.getElementById(entry.elId);
-      if (el) { el.textContent = txt; el.className = cls; }
-    } catch(e) {}
-  }, 30000);
+  deltaMap.set(elId, { symbol, entryPrice, elId, item });
+  const deltas = {};
+
+  const checkAt = (ms, key, updateUI) => {
+    setTimeout(async () => {
+      const p = await fetchPriceFresh(symbol);
+      if (!p) return;
+      const pct = ((p - entryPrice) / entryPrice) * 100;
+      deltas[key] = pct;
+      if (updateUI) {
+        const sign = pct >= 0 ? "+" : "";
+        const arrow = pct >= 0 ? "📈" : "📉";
+        const txt = arrow + " " + sign + pct.toFixed(2) + "%";
+        const cls = "delta-tag " + (pct >= 0 ? "delta-up" : "delta-dn");
+        if (item) { item._delta = txt; item._deltaCls = cls; }
+        const el = document.getElementById(elId);
+        if (el) { el.textContent = txt; el.className = cls; }
+      }
+      if (key === "d5m") {
+        deltaMap.delete(elId);
+        addMemoryRecord(symbol, item ? item.side : "?", item ? item.valueUSD : 0, deltas);
+      }
+    }, ms);
+  };
+
+  checkAt(30000,  "d30s", true);
+  checkAt(60000,  "d1m",  false);
+  checkAt(180000, "d3m",  false);
+  checkAt(300000, "d5m",  false);
 }
 
 /* ═══════════════════ DOM REFS ═══════════════════ */
@@ -1585,7 +1693,8 @@ function renderFeed() {
     sigBox.className = "signal-box " + sig.cls;
     sigBox.innerHTML =
       '<div class="signal-main">' + sig.main + '</div>' +
-      '<div class="signal-hint">' + sig.hint + '</div>';
+      '<div class="signal-hint">' + sig.hint + '</div>' +
+      '<button class="analyze-btn" data-symbol="' + item.symbol + '">🔍 ' + b + ' Hafıza Analizi</button>';
 
     // Wrapper — kart + yorum kutusu birlikte
     const wrapper = document.createElement("div");
@@ -1950,6 +2059,102 @@ function setupScroll() {
   });
 }
 
+/* ═══════════════════ ANALİZ MODAL ═══════════════════ */
+function openAnalyzeModal(symbol) {
+  const b = base(symbol);
+  const modal = document.getElementById("analyzeModal");
+  const title = document.getElementById("modalTitle");
+  const body  = document.getElementById("modalBody");
+  title.textContent = "🔍 " + b + " Hafıza Analizi";
+  body.innerHTML = '<div class="mem-empty"><div style="font-size:2rem">⏳</div><div style="margin-top:8px">Veriler yükleniyor...</div></div>';
+  modal.classList.remove("hidden");
+
+  getMemoryStats(symbol).then(stats2 => {
+    if (!stats2) {
+      body.innerHTML =
+        '<div class="mem-empty">' +
+        '<div style="font-size:2.5rem;margin-bottom:12px">🧠</div>' +
+        '<div style="font-size:1rem;font-weight:700;color:var(--text)">Henüz yeterli veri yok</div>' +
+        '<div style="font-size:.82rem;margin-top:8px">Bu coin için en az 1 likit 5 dakika önce gerçekleşmiş olmalı.<br>Sistem otomatik öğreniyor — bekle!</div>' +
+        '</div>';
+      return;
+    }
+
+  function renderSide(s, label, color) {
+    if (!s) return '<div style="color:var(--text3);font-size:.85rem;padding:8px 0">' + label + ' için henüz veri yok.</div>';
+    const rows = [
+      { key:"d30s", label:"30 saniye", hint:"Likit sonrası 30 saniyede fiyat ne yaptı?" },
+      { key:"d1m",  label:"1 dakika",  hint:"1 dakika sonra fiyat neredeydi?" },
+      { key:"d3m",  label:"3 dakika",  hint:"3 dakika sonra fiyat neredeydi?" },
+      { key:"d5m",  label:"5 dakika",  hint:"5 dakika sonra fiyat neredeydi?" },
+    ];
+    return rows.map(r => {
+      const d = s[r.key];
+      if (!d || d.n < 1) return "";
+      const avg = d.avg;
+      const up  = d.up;
+      const cls = avg > 0.05 ? "up" : avg < -0.05 ? "dn" : "neut";
+      const sign = avg >= 0 ? "+" : "";
+      const arrow = avg > 0.05 ? "📈" : avg < -0.05 ? "📉" : "➡️";
+      // Yüzde bar
+      const barW = Math.min(100, Math.abs(avg) * 20);
+      const barColor = avg >= 0 ? "var(--short)" : "var(--long)";
+      // Yorum
+      let yorum = "";
+      if (r.key === "d30s") {
+        if (up >= 70) yorum = "Çoğunlukla geri dönüş oluyor — scalp fırsatı olabilir";
+        else if (up <= 30) yorum = "Çoğunlukla devam ediyor — trende katılmak daha mantıklı";
+        else yorum = "Karışık sonuçlar — net bir pattern yok";
+      }
+      return '<div class="mem-stat-row ' + cls + '">' +
+        '<div class="mem-stat-time">' + r.label + '</div>' +
+        '<div class="mem-stat-main">' +
+          '<div class="mem-stat-val" style="color:' + barColor + '">' + arrow + ' Ort. ' + sign + avg.toFixed(2) + '%</div>' +
+          '<div class="mem-stat-hint">' + d.n + ' ölçümde ' + up + '% yukarı gitti' + (yorum ? ' — ' + yorum : '') + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  const oldest = stats2.oldest ? new Date(stats2.oldest).toLocaleDateString("tr-TR") : "?";
+
+  body.innerHTML =
+    '<div style="font-size:.78rem;color:var(--text3);margin-bottom:14px">' +
+    '📅 ' + oldest + " tarihinden bu yana " + stats2.total + " likit kaydedildi" +
+    '</div>' +
+
+    '<div class="mem-section">' +
+    '<div class="mem-section-title">😢 Long Yandığında Ne Oldu? <span class="mem-count-badge">' + (stats2.long ? stats2.long.count : 0) + ' kayıt</span></div>' +
+    '<div style="font-size:.78rem;color:var(--text3);margin-bottom:8px">Long pozisyon zorla kapandı = fiyat düşmüştü. Sonra ne oldu?</div>' +
+    renderSide(stats2.long, "Long likit", "var(--long)") +
+    '</div>' +
+
+    '<div class="mem-section">' +
+    '<div class="mem-section-title">😤 Short Yandığında Ne Oldu? <span class="mem-count-badge">' + (stats2.short ? stats2.short.count : 0) + ' kayıt</span></div>' +
+    '<div style="font-size:.78rem;color:var(--text3);margin-bottom:8px">Short pozisyon zorla kapandı = fiyat yükselmişti. Sonra ne oldu?</div>' +
+    renderSide(stats2.short, "Short likit", "var(--short)") +
+    '</div>' +
+
+    '<div style="font-size:.72rem;color:var(--text3);text-align:center;margin-top:8px;line-height:1.5">' +
+    '⚠️ Bu veriler geçmiş davranışlara dayanır.<br>Gelecek garantisi vermez. Kendi kararını kendin ver.' +
+    '</div>';
+  }); // getMemoryStats.then kapanışı
+}
+
+function setupAnalyzeModal() {
+  document.getElementById("modalClose").addEventListener("click", () => {
+    document.getElementById("analyzeModal").classList.add("hidden");
+  });
+  document.getElementById("analyzeModal").addEventListener("click", e => {
+    if (e.target === e.currentTarget) e.currentTarget.classList.add("hidden");
+  });
+  // Delegated click — analiz butonları
+  document.getElementById("feedList").addEventListener("click", e => {
+    const btn = e.target.closest(".analyze-btn");
+    if (btn) openAnalyzeModal(btn.dataset.symbol);
+  });
+}
+
 /* ═══════════════════ SETTINGS UI ═══════════════════ */
 function setupSettings() {
   const apTog = (el, icon, state, onE, offE) => {
@@ -2068,6 +2273,7 @@ function init() {
   setupTabs();
   setupScroll();
   setupSettings();
+  setupAnalyzeModal();
   initCharts();
   updateStatsUI();
   renderActBar();
