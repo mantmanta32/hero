@@ -730,6 +730,22 @@
     .cascade-b { background: var(--long-l); color: var(--long); }
     .warn-b { background: var(--whale-l); color: var(--whale); }
     .whale-b { background: var(--whale-l); color: var(--whale); }
+
+    /* ---- FİLTRE CHIP (kompakt) ---- */
+    .fchip {
+      background: var(--bg); border: 1.5px solid var(--border);
+      border-radius: 8px; padding: 4px 9px;
+      font-family: 'Fredoka', sans-serif;
+      font-size: .75rem; font-weight: 700; color: var(--text3);
+      cursor: pointer; transition: all .12s; white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fchip:active { transform: scale(.92); }
+    .fchip.active {
+      background: var(--purple); color: white; border-color: var(--purple);
+    }
+    .fchip.long-on  { background: var(--long);  color: white; border-color: var(--long); }
+    .fchip.short-on { background: var(--short); color: white; border-color: var(--short); }
   </style>
 </head>
 <body>
@@ -837,6 +853,15 @@
     <div class="page" id="tab-analytics">
       <div class="page-scroll">
 
+        <!-- FIRSAT MODU — otomatik güncellenir -->
+        <div style="background:linear-gradient(135deg,#1a0533,#0d1f3c);border-radius:var(--r);margin:8px 8px 0;padding:14px;box-shadow:0 4px 20px rgba(0,0,0,.3)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-size:1rem;font-weight:700;color:white">🎯 Fırsat Modu</div>
+            <div id="oppAge" style="font-size:.65rem;color:rgba(255,255,255,.4)"></div>
+          </div>
+          <div id="oppList"><div style="color:rgba(255,255,255,.4);font-size:.82rem;text-align:center;padding:8px">Veri bekleniyor...</div></div>
+        </div>
+
         <!-- PİYASA YORUMU — otomatik üretilir -->
         <div class="market-comment" id="marketComment">
           <div class="mc-title">🧠 Piyasa Yorumu</div>
@@ -875,71 +900,98 @@
 
     <!-- ===== FILTER PAGE ===== -->
     <div class="page" id="tab-filter">
-      <div class="page-scroll">
-        <div class="a-card">
-          <div class="a-title" style="margin-bottom:12px">&#x1F50D; Filtreler</div>
+      <div class="page-scroll" style="padding:8px">
 
-          <div class="inp-label">Miktar Filtresi</div>
-          <div class="filter-chip-group" id="filterStrip">
-            <button class="chip active" data-filter="amount" data-val="0">&#x1F30A; Hepsi</button>
-            <button class="chip" data-filter="amount" data-val="1000">&gt;$1K</button>
-            <button class="chip" data-filter="amount" data-val="10000">&gt;$10K</button>
-            <button class="chip" data-filter="amount" data-val="100000">&gt;$100K &#x1F525;</button>
-            <button class="chip" data-filter="amount" data-val="500000">&#x1F40B; $500K</button>
+        <!-- ARAMA + MİKTAR -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+          <div>
+            <div style="font-size:.6rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">🔍 Coin Ara</div>
+            <input type="text" id="symFilter" style="width:100%;background:white;border:1.5px solid var(--border);border-radius:10px;padding:7px 10px;font-family:'Fredoka',sans-serif;font-size:.85rem;font-weight:600;color:var(--text);outline:none" placeholder="BTC, ETH...">
           </div>
-
-          <div class="inp-label" style="margin-top:14px">Yon Filtresi</div>
-          <div class="filter-chip-group">
-            <button class="chip active" data-filter="side" data-side="all">&#x1F308; Hepsi</button>
-            <button class="chip" data-filter="side" data-side="long">&#x1F62D; Long</button>
-            <button class="chip" data-filter="side" data-side="short">&#x1F620; Short</button>
+          <div>
+            <div style="font-size:.6rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">💰 Özel Miktar ($)</div>
+            <input type="number" id="customAmt" style="width:100%;background:white;border:1.5px solid var(--border);border-radius:10px;padding:7px 10px;font-family:'Fredoka',sans-serif;font-size:.85rem;font-weight:600;color:var(--text);outline:none" placeholder="25000">
           </div>
+        </div>
 
-          <div style="margin-top:14px">
-            <label class="inp-label" for="customAmt">Ozel Miktar ($)</label>
-            <input type="number" id="customAmt" class="thr-inp" placeholder="Ornek: 25000">
-          </div>
+        <!-- FİLTRE KARTLARI -->
+        <div style="background:white;border-radius:14px;border:1.5px solid var(--border);padding:10px 12px;margin-bottom:6px">
 
-          <div style="margin-top:14px">
-            <label class="inp-label" for="symFilter">Coin Ara</label>
-            <input type="text" id="symFilter" class="thr-inp" placeholder="BTC, ETH, SOL...">
-          </div>
-
-          <div style="margin-top:14px">
-            <div class="inp-label">Siralama</div>
-            <div class="filter-chip-group">
-              <button class="sort-btn active" id="sortTime">&#x1F550; Yeniden Eskiye</button>
-              <button class="sort-btn" id="sortSize">&#x1F4B8; Buyukten Kucuge</button>
+          <!-- Miktar -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:.62rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px">Miktar</span>
+            <div style="display:flex;gap:4px" id="filterStrip">
+              <button class="fchip active" data-filter="amount" data-val="0">Hepsi</button>
+              <button class="fchip" data-filter="amount" data-val="1000">$1K</button>
+              <button class="fchip" data-filter="amount" data-val="10000">$10K</button>
+              <button class="fchip" data-filter="amount" data-val="100000">$100K</button>
+              <button class="fchip" data-filter="amount" data-val="500000">$500K</button>
             </div>
           </div>
 
-          <div class="inp-label" style="margin-top:14px">Zaman Aralığı</div>
-          <div class="filter-chip-group" id="timeChips">
-            <button class="chip active" data-time="0">⏰ Hepsi</button>
-            <button class="chip" data-time="60">1 dk</button>
-            <button class="chip" data-time="300">5 dk</button>
-            <button class="chip" data-time="900">15 dk</button>
-            <button class="chip" data-time="3600">1 saat</button>
+          <div style="height:1px;background:var(--border);margin:6px 0"></div>
+
+          <!-- Yön -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:.62rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px">Yön</span>
+            <div style="display:flex;gap:4px">
+              <button class="fchip active" data-filter="side" data-side="all">Hepsi</button>
+              <button class="fchip" data-filter="side" data-side="long">📉 Long</button>
+              <button class="fchip" data-filter="side" data-side="short">📈 Short</button>
+            </div>
           </div>
 
-          <div class="inp-label" style="margin-top:14px">Sinyal Tipi</div>
-          <div class="filter-chip-group" id="signalChips">
-            <button class="chip active" data-signal="all">🌊 Hepsi</button>
-            <button class="chip" data-signal="cascade">⚡ Cascade</button>
-            <button class="chip" data-signal="warning">⚠️ Uyarı</button>
-            <button class="chip" data-signal="whale">🐋 Balina</button>
+          <div style="height:1px;background:var(--border);margin:6px 0"></div>
+
+          <!-- Zaman -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:.62rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px">Zaman</span>
+            <div style="display:flex;gap:4px" id="timeChips">
+              <button class="fchip active" data-time="0">Hepsi</button>
+              <button class="fchip" data-time="60">1dk</button>
+              <button class="fchip" data-time="300">5dk</button>
+              <button class="fchip" data-time="900">15dk</button>
+              <button class="fchip" data-time="3600">1s</button>
+            </div>
           </div>
 
-          <button id="exportCsvBtn" style="width:100%;margin-top:14px;background:var(--short-l);border:2px solid var(--short);border-radius:var(--r-pill);padding:12px;font-family:'Fredoka',sans-serif;font-size:.9rem;font-weight:700;color:var(--short);cursor:pointer">📥 CSV İndir</button>
+          <div style="height:1px;background:var(--border);margin:6px 0"></div>
+
+          <!-- Sinyal -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:.62rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px">Sinyal</span>
+            <div style="display:flex;gap:4px" id="signalChips">
+              <button class="fchip active" data-signal="all">Hepsi</button>
+              <button class="fchip" data-signal="cascade">⚡</button>
+              <button class="fchip" data-signal="warning">⚠️</button>
+              <button class="fchip" data-signal="whale">🐋</button>
+            </div>
+          </div>
+
+          <div style="height:1px;background:var(--border);margin:6px 0"></div>
+
+          <!-- Sıralama -->
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:.62rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px">Sırala</span>
+            <div style="display:flex;gap:4px">
+              <button class="fchip active" id="sortTime">🕐 Yeni</button>
+              <button class="fchip" id="sortSize">� Büyük</button>
+            </div>
+          </div>
         </div>
 
-        <div class="a-card" style="margin-top:8px">
-          <div class="a-title" style="margin-bottom:10px">&#x1F4CA; Piyasa Icgoruleri</div>
+        <!-- CSV + Piyasa -->
+        <div style="display:grid;grid-template-columns:1fr;gap:6px">
+          <button id="exportCsvBtn" style="background:var(--short-l);border:1.5px solid var(--short);border-radius:10px;padding:9px;font-family:'Fredoka',sans-serif;font-size:.82rem;font-weight:700;color:var(--short);cursor:pointer;width:100%">📥 CSV İndir</button>
+        </div>
+
+        <div class="a-card" style="margin-top:6px">
+          <div class="a-title" style="margin-bottom:8px;font-size:1rem">📊 Piyasa İçgörüleri</div>
           <div id="mktInsights"></div>
         </div>
-        <div class="a-card" style="margin-top:8px">
-          <div class="a-title" style="margin-bottom:10px">&#x1F525; Yangin Haritasi</div>
-          <div id="mktDensity" style="margin-top:8px"></div>
+        <div class="a-card" style="margin-top:6px">
+          <div class="a-title" style="margin-bottom:8px;font-size:1rem">🔥 Yangin Haritası</div>
+          <div id="mktDensity" style="margin-top:6px"></div>
         </div>
       </div>
     </div>
@@ -1257,6 +1309,103 @@ function getSignalComment(item, cascadeInfo) {
   };
 }
 
+/* ═══════════════════ FIRSAT MODU ═══════════════════ */
+let _oppLastRun = 0;
+
+async function renderOpportunityMode() {
+  const el = document.getElementById("oppList");
+  const ageEl = document.getElementById("oppAge");
+  if (!el) return;
+
+  const now = Date.now();
+  // 15 saniyede bir güncelle
+  if (now - _oppLastRun < 15000) {
+    if (ageEl) ageEl.textContent = Math.round((now - _oppLastRun) / 1000) + "sn önce";
+    return;
+  }
+  _oppLastRun = now;
+  if (ageEl) ageEl.textContent = "güncelleniyor...";
+
+  // Son 5dk'da likit olan unique coinler
+  const recentSymbols = [...new Set(
+    items.filter(i => i.time > now - 300000).map(i => i.symbol)
+  )].slice(0, 15); // max 15 coin
+
+  if (!recentSymbols.length) {
+    el.innerHTML = '<div style="color:rgba(255,255,255,.4);font-size:.82rem;text-align:center;padding:8px">Henüz veri yok</div>';
+    return;
+  }
+
+  const opportunities = [];
+
+  for (const symbol of recentSymbols) {
+    const b = base(symbol);
+    const currentPrice = priceCache.get(symbol);
+    const coinItems = items.filter(i => i.symbol === symbol && i.time > now - 300000);
+    const opps = [];
+
+    // 1. Baskı bölgesi yakınlığı (API yok, sadece items)
+    const lpl = calcLPL(symbol);
+    if (lpl && lpl.zones.length > 0 && currentPrice) {
+      const nearest = lpl.zones.reduce((best, z) => {
+        const dist = Math.min(Math.abs(currentPrice - z.priceMin), Math.abs(currentPrice - z.priceMax)) / currentPrice;
+        return dist < best.dist ? { dist, zone: z } : best;
+      }, { dist: Infinity, zone: null });
+      if (nearest.dist < 0.01) { // %1 içinde
+        const pct = (nearest.dist * 100).toFixed(2);
+        opps.push({ type: "lpl", score: Math.round((1 - nearest.dist * 100) * 50), text: `📍 Baskı bölgesine %${pct} kaldı (${fmt(nearest.zone.total)})` });
+      }
+    }
+
+    // 2. Lag fırsatı — son likit için lag profili var mı?
+    const lastItem = coinItems[0];
+    if (lastItem) {
+      const lagSt = getLagStats(symbol, lastItem.side);
+      if (lagSt && lagSt.n >= 3) {
+        const elapsed = (now - lastItem.time) / 1000;
+        const remaining = lagSt.avgLag - elapsed;
+        if (remaining > 0 && remaining <= 15) { // 15sn içinde dip/tepe bekleniyor
+          const dipTepe = lastItem.side === "SELL" ? "dip" : "tepe";
+          opps.push({ type: "lag", score: Math.round((1 - remaining / 15) * 40) + 30, text: `⏱️ ${dipTepe} için ~${Math.round(remaining)}sn kaldı (geçmiş: %${lagSt.avgRecovery} toparlanma)` });
+        }
+      }
+    }
+
+    // 3. Cascade momentum
+    const cascInfo = lastItem && lastItem._cascade;
+    if (cascInfo && cascInfo.type === "cascade") {
+      opps.push({ type: "cascade", score: 35, text: `⚡ Cascade devam ediyor (${cascInfo.count}x)` });
+    }
+
+    if (opps.length > 0) {
+      const totalScore = opps.reduce((s, o) => s + o.score, 0);
+      opportunities.push({ symbol, b, opps, score: totalScore });
+    }
+  }
+
+  // Skora göre sırala
+  opportunities.sort((a, b) => b.score - a.score);
+
+  if (!opportunities.length) {
+    el.innerHTML = '<div style="color:rgba(255,255,255,.4);font-size:.82rem;text-align:center;padding:8px">Şu an aktif fırsat yok — bekle</div>';
+    if (ageEl) ageEl.textContent = "az önce";
+    return;
+  }
+
+  el.innerHTML = opportunities.slice(0, 5).map(opp => {
+    const scoreColor = opp.score >= 70 ? "#f43f5e" : opp.score >= 40 ? "#f59e0b" : "#10b981";
+    return `<div style="background:rgba(255,255,255,.06);border-radius:10px;padding:8px 10px;margin-bottom:6px;border-left:3px solid ${scoreColor}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:.88rem;font-weight:700;color:white">${opp.b}</span>
+        <span style="font-size:.72rem;font-weight:700;color:${scoreColor};background:rgba(255,255,255,.1);padding:1px 7px;border-radius:20px">${opp.score} puan</span>
+      </div>
+      ${opp.opps.map(o => `<div style="font-size:.72rem;color:rgba(255,255,255,.7);margin-top:2px">${o.text}</div>`).join("")}
+    </div>`;
+  }).join("");
+
+  if (ageEl) ageEl.textContent = "az önce";
+}
+
 /* ═══════════════════ PİYASA YORUMU ═══════════════════ */
 function renderMarketComment() {
   const el = document.getElementById("mcLines");
@@ -1355,8 +1504,9 @@ async function saveMemoryCoin(key, data) {
 async function addMemoryRecord(symbol, side, val, deltas) {
   const mem = await loadMemory();
   const key = base(symbol);
-  if (!mem[key]) mem[key] = { records: [], lagProfiles: { SELL: [], BUY: [] } };
+  if (!mem[key]) mem[key] = { records: [], lagProfiles: { SELL: [], BUY: [] }, impactProfiles: { SELL: [], BUY: [] } };
   if (!mem[key].lagProfiles) mem[key].lagProfiles = { SELL: [], BUY: [] };
+  if (!mem[key].impactProfiles) mem[key].impactProfiles = { SELL: [], BUY: [] };
   const cutoff = Date.now() - MEMORY_DAYS * 86400000;
   mem[key].records = mem[key].records.filter(r => r.time > cutoff);
   mem[key].records.push({ time: Date.now(), side, val, ...deltas });
@@ -1364,6 +1514,42 @@ async function addMemoryRecord(symbol, side, val, deltas) {
     mem[key].records = mem[key].records.slice(-MEMORY_MAX);
   }
   saveMemoryCoin(key, mem[key]);
+}
+
+/* ═══════════════════ ETKİ KATSAYISI ═══════════════════ */
+// Likit anından 10sn sonra priceCache'den fiyat oku, etki hesapla
+function scheduleImpact(symbol, side, val, entryPrice) {
+  if (!entryPrice || entryPrice <= 0 || val < 1000) return; // $1K altı takip etme
+  setTimeout(async () => {
+    const exitPrice = priceCache.get(symbol);
+    if (!exitPrice || exitPrice <= 0) return;
+    const impact = ((exitPrice - entryPrice) / entryPrice) * 100;
+    // Firebase'e kaydet
+    const mem = await loadMemory();
+    const key = base(symbol);
+    if (!mem[key]) mem[key] = { records: [], lagProfiles: { SELL: [], BUY: [] }, impactProfiles: { SELL: [], BUY: [] } };
+    if (!mem[key].impactProfiles) mem[key].impactProfiles = { SELL: [], BUY: [] };
+    if (!mem[key].impactProfiles[side]) mem[key].impactProfiles[side] = [];
+    mem[key].impactProfiles[side].push({
+      t: Date.now(), impact: parseFloat(impact.toFixed(4)), val
+    });
+    // Son 200 kayıt tut
+    if (mem[key].impactProfiles[side].length > 200) {
+      mem[key].impactProfiles[side] = mem[key].impactProfiles[side].slice(-200);
+    }
+    saveMemoryCoin(key, mem[key]);
+  }, 10000); // 10 saniye
+}
+
+function getImpactStats(symbol, side) {
+  const key = base(symbol);
+  const mem = memCache[key];
+  if (!mem || !mem.impactProfiles || !mem.impactProfiles[side] || mem.impactProfiles[side].length < 5) return null;
+  const arr = mem.impactProfiles[side];
+  const impacts = arr.map(r => r.impact);
+  const avg = impacts.reduce((s, v) => s + v, 0) / impacts.length;
+  const absAvg = impacts.map(Math.abs).reduce((s, v) => s + v, 0) / impacts.length;
+  return { n: arr.length, avg: parseFloat(avg.toFixed(4)), absAvg: parseFloat(absAvg.toFixed(4)) };
 }
 
 /* ═══════════════════ LAG ANALİZİ ═══════════════════ */
@@ -1703,6 +1889,9 @@ function addItem(item) {
     computeLag(item.symbol, item.side, item.time, item.price);
   }
 
+  // Etki katsayısı — 10sn sonra priceCache'den oku
+  scheduleImpact(item.symbol, item.side, v, item.price);
+
   // Lag uyarısı — toast'a ekle (hafıza yüklüyse)
   const lagSt = getLagStats(item.symbol, item.side);
   if (lagSt && lagSt.n >= 3 && v >= cfg.alertThr) {
@@ -1858,7 +2047,7 @@ function updateStatsUI() {
 function updateAnalytics() {
   const anOn  = D.pages.analytics.classList.contains("active");
   const mktOn = D.pages.filter.classList.contains("active");
-  if (anOn) { renderTopSyms(); renderSessStats(); updateVolChart(); renderMarketComment(); }
+  if (anOn) { renderTopSyms(); renderSessStats(); updateVolChart(); renderMarketComment(); renderOpportunityMode(); }
   if (mktOn) { renderDensity(); renderInsights(); }
   renderActBar();
 }
@@ -2509,7 +2698,44 @@ function analyzeMarketData(symbol, marketData, item, cascadeInfo, memStats) {
     });
   }
 
-  /* ── 9. LAG ANALİZİ (Firebase'den) ── */
+  /* ── 9. ETKİ KATSAYISI ── */
+  const impSide = isL !== null ? (isL ? "SELL" : "BUY") : "SELL";
+  const impSt = getImpactStats(symbol, impSide);
+  if (impSt && impSt.n >= 5 && item) {
+    // Anlık etki — item'ın fiyatı ile şu anki fiyat (10sn geçmişse)
+    const currentPrice = priceCache.get(symbol);
+    const timeSinceLiq = (Date.now() - item.time) / 1000;
+    let impactHtml = "";
+    if (currentPrice && item.price && timeSinceLiq >= 8 && timeSinceLiq <= 30) {
+      const instantImpact = ((currentPrice - item.price) / item.price) * 100;
+      const ratio = impSt.absAvg > 0 ? Math.abs(instantImpact) / impSt.absAvg : 0;
+      const sign = instantImpact >= 0 ? "+" : "";
+      let durum = "Normal";
+      let durumColor = "var(--text3)";
+      if (ratio >= 2) { durum = "🚨 Ortalamadan " + ratio.toFixed(1) + "x yüksek — panik!"; durumColor = "var(--long)"; }
+      else if (ratio >= 1.5) { durum = "⚠️ Ortalamanın üzerinde"; durumColor = "var(--whale)"; }
+      else { durum = "✅ Normal etki"; durumColor = "var(--short)"; }
+      impactHtml = `Anlık: ${sign}${instantImpact.toFixed(3)}% | Ort: ±${impSt.absAvg.toFixed(3)}% | ${durum}`;
+      results.push({
+        icon: "⚡",
+        title: "Etki Katsayısı (10sn)",
+        main: `${sign}${instantImpact.toFixed(3)}% — ${durum}`,
+        hint: `${impSt.n} ölçüme göre bu coinde ortalama etki ±${impSt.absAvg.toFixed(3)}%.`,
+        color: durumColor,
+        extra: ratio >= 2 ? `Bu likit normalden çok daha güçlü etki yarattı — büyük oyuncu hareketi olabilir` : null
+      });
+    } else if (impSt.n >= 10) {
+      results.push({
+        icon: "⚡",
+        title: "Etki Katsayısı (10sn)",
+        main: `Ortalama etki: ±${impSt.absAvg.toFixed(3)}%`,
+        hint: `${impSt.n} ölçüme göre bu coinde likit sonrası 10sn'de ortalama bu kadar hareket oluyor.`,
+        color: "var(--purple)"
+      });
+    }
+  }
+
+  /* ── 10. LAG ANALİZİ (Firebase'den) ── */
   const lagSt = getLagStats(symbol, isL !== null ? (isL ? "SELL" : "BUY") : "SELL");
   if (lagSt && lagSt.n >= 3) {
     const dipTepe = isL ? "dip" : "tepe";
