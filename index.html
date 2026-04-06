@@ -863,9 +863,12 @@ function getLagStats(symbol,side){
   const key=base(symbol);const mem=memCache[key];
   if(!mem||!mem.lagProfiles||!mem.lagProfiles[side]||mem.lagProfiles[side].length<3)return null;
   const lags=mem.lagProfiles[side];
-  const avgLag=lags.reduce((s,l)=>s+l.lag,0)/lags.length;
-  const avgRecovery=lags.reduce((s,l)=>s+l.recovery,0)/lags.length;
-  return{n:lags.length,avgLag:Math.round(avgLag),avgRecovery:parseFloat(avgRecovery.toFixed(2))};
+  // Geçersiz lag değerlerini filtrele (0 veya negatif lag anlamsız)
+  const validLags=lags.filter(l=>l.lag>0&&l.lag<60&&l.recovery!=null);
+  if(validLags.length<3)return null;
+  const avgLag=validLags.reduce((s,l)=>s+l.lag,0)/validLags.length;
+  const avgRecovery=validLags.reduce((s,l)=>s+l.recovery,0)/validLags.length;
+  return{n:validLags.length,avgLag:Math.round(avgLag),avgRecovery:parseFloat(avgRecovery.toFixed(2))};
 }
 function getImpactStats(symbol,side){
   const key=base(symbol);const mem=memCache[key];
@@ -912,10 +915,10 @@ async function computeLag(symbol,side,liqTime,liqPrice){
       recoveryPct=((extremePrice-minAfter)/extremePrice)*100;
     }
     const mem=await loadMemory();const key=base(symbol);
-    if(!mem[key])mem[key]={records:[],lagProfiles:{SELL:[],BUY:[]}};
+    if(!mem[key])mem[key]={records:[],lagProfiles:{SELL:[],BUY:[]},impactProfiles:{SELL:[],BUY:[]}};
     if(!mem[key].lagProfiles)mem[key].lagProfiles={SELL:[],BUY:[]};
     if(!mem[key].lagProfiles[side])mem[key].lagProfiles[side]=[];
-    mem[key].lagProfiles[side].push({t:Date.now(),lag:lagSec,recovery:parseFloat(recoveryPct.toFixed(3)),val:0});
+    mem[key].lagProfiles[side].push({t:Date.now(),lag:lagSec,recovery:parseFloat(recoveryPct.toFixed(3)),val:liqPrice||0});
     if(mem[key].lagProfiles[side].length>50)mem[key].lagProfiles[side]=mem[key].lagProfiles[side].slice(-50);
     saveMemoryCoin(key,mem[key]);
   }catch(e){}
@@ -1955,19 +1958,39 @@ async function fetchMarketData(symbol){
 
 async function getMemoryStats(symbol){
   const mem=await loadMemory();const key=base(symbol);
-  if(!mem[key]||!mem[key].records||!mem[key].records.length)return null;
-  const recs=mem[key].records;
-  const longRecs=recs.filter(r=>r.side==="SELL");
-  const shortRecs=recs.filter(r=>r.side==="BUY");
+  if(!mem[key])return null;
+
+  // records yoksa veya boşsa bile lag verisi olabilir — onu da döndür
+  const recs = mem[key].records || [];
+  const hasRecords = recs.length > 0;
+  const lagLong  = getLagStats(symbol, "SELL");
+  const lagShort = getLagStats(symbol, "BUY");
+  const hasLag   = lagLong || lagShort;
+
+  if (!hasRecords && !hasLag) return null;
+
+  const longRecs  = recs.filter(r=>r.side==="SELL");
+  const shortRecs = recs.filter(r=>r.side==="BUY");
+
   function calcStats(arr){
     if(!arr.length)return null;
     const withD30=arr.filter(r=>r.d30s!=null);const withD1m=arr.filter(r=>r.d1m!=null);
     const withD3m=arr.filter(r=>r.d3m!=null);const withD5m=arr.filter(r=>r.d5m!=null);
     const avg=(a,k)=>a.length?(a.reduce((s,r)=>s+r[k],0)/a.length):null;
     const upPct=(a,k)=>a.length?Math.round(a.filter(r=>r[k]>0).length/a.length*100):null;
-    return{count:arr.length,avgVal:arr.reduce((s,r)=>s+r.val,0)/arr.length,d30s:{avg:avg(withD30,"d30s"),up:upPct(withD30,"d30s"),n:withD30.length},d1m:{avg:avg(withD1m,"d1m"),up:upPct(withD1m,"d1m"),n:withD1m.length},d3m:{avg:avg(withD3m,"d3m"),up:upPct(withD3m,"d3m"),n:withD3m.length},d5m:{avg:avg(withD5m,"d5m"),up:upPct(withD5m,"d5m"),n:withD5m.length}};
+    return{count:arr.length,avgVal:arr.reduce((s,r)=>s+r.val,0)/arr.length,
+      d30s:{avg:avg(withD30,"d30s"),up:upPct(withD30,"d30s"),n:withD30.length},
+      d1m:{avg:avg(withD1m,"d1m"),up:upPct(withD1m,"d1m"),n:withD1m.length},
+      d3m:{avg:avg(withD3m,"d3m"),up:upPct(withD3m,"d3m"),n:withD3m.length},
+      d5m:{avg:avg(withD5m,"d5m"),up:upPct(withD5m,"d5m"),n:withD5m.length}};
   }
-  return{total:recs.length,long:calcStats(longRecs),short:calcStats(shortRecs),oldest:recs[0]?recs[0].time:null,lag:{long:getLagStats(symbol,"SELL"),short:getLagStats(symbol,"BUY")}};
+  return{
+    total:recs.length,
+    long:calcStats(longRecs),
+    short:calcStats(shortRecs),
+    oldest:recs[0]?recs[0].time:null,
+    lag:{long:lagLong,short:lagShort}
+  };
 }
 
 function analyzeMarketData(symbol,marketData,item,cascadeInfo,memStats){
@@ -2308,9 +2331,16 @@ const MEMORY_MAX  = 100;
 async function addMemoryRecord(symbol, side, val, deltas) {
   const mem = await loadMemory();
   const key = base(symbol);
+  // Tüm alt yapıyı garantile
   if (!mem[key]) mem[key] = { records: [], lagProfiles: { SELL: [], BUY: [] }, impactProfiles: { SELL: [], BUY: [] } };
+  if (!mem[key].records) mem[key].records = [];
   if (!mem[key].lagProfiles) mem[key].lagProfiles = { SELL: [], BUY: [] };
+  if (!mem[key].lagProfiles.SELL) mem[key].lagProfiles.SELL = [];
+  if (!mem[key].lagProfiles.BUY)  mem[key].lagProfiles.BUY  = [];
   if (!mem[key].impactProfiles) mem[key].impactProfiles = { SELL: [], BUY: [] };
+  if (!mem[key].impactProfiles.SELL) mem[key].impactProfiles.SELL = [];
+  if (!mem[key].impactProfiles.BUY)  mem[key].impactProfiles.BUY  = [];
+
   const cutoff = Date.now() - MEMORY_DAYS * 86400000;
   mem[key].records = mem[key].records.filter(r => r.time > cutoff);
   mem[key].records.push({ time: Date.now(), side, val, ...deltas });
@@ -2318,16 +2348,27 @@ async function addMemoryRecord(symbol, side, val, deltas) {
   saveMemoryCoin(key, mem[key]);
 }
 
-// Likit sonrası 30sn/1dk/3dk/5dk fiyat değişimlerini kaydet
+// Likit sonrası 30sn/1dk/3dk/5dk fiyat değişimlerini SIRAYLA kaydet
 function scheduleMemoryRecord(symbol, side, val, entryPrice) {
   if (!entryPrice || entryPrice <= 0 || val < 1000) return;
-  const checkpoints = [{ key: "d30s", ms: 30000 }, { key: "d1m", ms: 60000 }, { key: "d3m", ms: 180000 }, { key: "d5m", ms: 300000 }];
+  // Her checkpoint'i sırayla bekle, deltas'ı biriktir
+  const checkpoints = [
+    { key: "d30s", ms: 30000 },
+    { key: "d1m",  ms: 60000 },
+    { key: "d3m",  ms: 180000 },
+    { key: "d5m",  ms: 300000 }
+  ];
   const deltas = {};
   checkpoints.forEach(cp => {
     setTimeout(() => {
       const p = priceCache.get(symbol);
-      if (p && p > 0) deltas[cp.key] = parseFloat(((p - entryPrice) / entryPrice * 100).toFixed(4));
-      if (cp.key === "d5m") addMemoryRecord(symbol, side, val, deltas);
+      if (p && p > 0) {
+        deltas[cp.key] = parseFloat(((p - entryPrice) / entryPrice * 100).toFixed(4));
+      }
+      // d5m'de tüm deltas toplanmış olur — Firebase'e yaz
+      if (cp.key === "d5m") {
+        addMemoryRecord(symbol, side, val, { ...deltas });
+      }
     }, cp.ms);
   });
 }
