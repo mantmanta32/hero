@@ -5,9 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#fdf4ff">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>🐙 Ahtapot Sistem v2</title>
+  <title>🐙 Ahtapot Sistem v3 - AI</title>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
 </head>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -26,6 +31,13 @@
   --sh:0 4px 20px rgba(168,85,247,.12);--sh-lg:0 8px 32px rgba(168,85,247,.2);
   --r:18px;--r-sm:14px;--r-pill:999px;
   --bot-h:64px;--safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);
+  /* AI Colors */
+  --ai-glow:rgba(168,85,247,.4);
+  --learning:#10b981;
+  --prediction:#f59e0b;
+  --neural:#ec4899;
+  --profit:#22c55e;
+  --loss:#ef4444;
 }
 body{background:var(--bg);color:var(--text);font-family:'Fredoka',sans-serif;font-size:16px;font-weight:500;height:100dvh;overflow:hidden;width:100%}
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
@@ -37,10 +49,13 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 ::-webkit-scrollbar-track{background:var(--bg2);border-radius:4px}
 ::-webkit-scrollbar-thumb{background:var(--purple-l);border-radius:4px;border:2px solid var(--bg2)}
 ::-webkit-scrollbar-thumb:hover{background:var(--purple)}
-</style>
-<style>
+
 /* ── APP SHELL ── */
 .app{display:flex;flex-direction:column;height:100dvh;position:relative;z-index:1;overflow:hidden}
+
+/* ── NEURAL BACKGROUND ── */
+.neural-net{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.04}
+
 /* ── TOPBAR ── */
 .topbar{background:var(--bg2);border-bottom:1.5px solid var(--border);padding:4px 10px;padding-top:calc(4px + var(--safe-t));display:flex;align-items:center;gap:8px;flex-shrink:0;z-index:20}
 .logo{font-size:.95rem;font-weight:700;background:linear-gradient(135deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;white-space:nowrap}
@@ -49,6 +64,13 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .led.live{background:var(--short);box-shadow:0 0 0 3px rgba(16,185,129,.25);animation:blink 1.4s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.7)}}
 .xp-pill{display:flex;align-items:center;gap:4px;background:linear-gradient(135deg,var(--purple-l),var(--pink-l));border:1.5px solid var(--border);border-radius:var(--r-pill);padding:3px 9px;font-size:.72rem;font-weight:700;color:var(--purple);white-space:nowrap;cursor:pointer;box-shadow:var(--sh)}
+
+/* Learning Indicator */
+.learning-indicator{display:inline-flex;align-items:center;gap:6px;font-size:.65rem;color:var(--learning);background:rgba(16,185,129,.1);padding:3px 10px;border-radius:20px;border:1px solid rgba(16,185,129,.3);animation:aiPulse 2s infinite}
+.learning-indicator.active::before{content:'';width:6px;height:6px;background:var(--learning);border-radius:50%;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes aiPulse{0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.3)}50%{box-shadow:0 0 10px 3px rgba(16,185,129,.2)}}
+
 /* ── STATS BAR ── */
 .stats-wrap{display:flex;background:var(--bg2);border-bottom:1.5px solid var(--border);flex-shrink:0}
 .stat-card{flex:1;display:flex;flex-direction:column;align-items:center;padding:4px 2px;border-right:1px solid var(--border)}
@@ -59,17 +81,25 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .stat-num.lon{color:var(--long)}
 .stat-num.sho{color:var(--short)}
 .stat-num.wha{color:var(--whale)}
+
+/* AI Stats Bar */
+.ai-stats-wrap{display:flex;background:linear-gradient(90deg,var(--bg2),rgba(168,85,247,.05));border-bottom:1.5px solid var(--border);flex-shrink:0;padding:6px 4px}
+.ai-stat-card{flex:1;display:flex;flex-direction:column;align-items:center;padding:4px 2px;border-right:1px solid var(--border)}
+.ai-stat-card:last-child{border-right:none}
+.ai-stat-lbl{font-size:.5rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.2px;line-height:1.1}
+.ai-stat-num{font-size:.8rem;font-weight:700;line-height:1.2}
+
 /* ── RATIO BAR ── */
 .ratio-wrap{padding:2px 10px;background:var(--bg2);border-bottom:1.5px solid var(--border);flex-shrink:0}
 .ratio-track{height:5px;background:var(--short-l);border-radius:99px;overflow:hidden}
 .ratio-fill{height:100%;width:50%;background:linear-gradient(90deg,var(--long),var(--orange));border-radius:99px;transition:width .5s cubic-bezier(.2,.9,.4,1.1)}
+
 /* ── PAGES ── */
 .pages{flex:1;overflow:hidden;position:relative;min-height:0}
 .page{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;pointer-events:none;transform:translateY(8px);transition:opacity .2s,transform .2s}
 .page.active{opacity:1;pointer-events:auto;transform:translateY(0)}
 .page-scroll{flex:1;overflow-y:auto;min-height:0;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:8px}
-</style>
-<style>
+
 /* ── FEED ROW ── */
 .feed-hdr{display:grid;grid-template-columns:1fr auto auto;padding:3px 12px;font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:.3px;background:var(--bg2);border-bottom:1.5px solid var(--border);flex-shrink:0}
 .feed-hdr span:nth-child(2){text-align:right;padding-right:8px}
@@ -100,17 +130,18 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .cascade-b{background:var(--long-l);color:var(--long)}
 .warn-b{background:var(--whale-l);color:var(--whale)}
 .whale-b{background:var(--whale-l);color:var(--whale)}
+
 /* ── DELTA TAG ── */
 .delta-tag{font-size:.65rem;font-weight:700;margin-top:1px;white-space:nowrap;border-radius:5px;padding:0 4px;display:inline-block}
 .delta-wait{color:var(--text3);background:none;font-size:.62rem}
 .delta-up{color:var(--short);background:var(--short-l)}
 .delta-dn{color:var(--long);background:var(--long-l)}
+
 /* ── SCROLL PILL ── */
 .scroll-pill-wrap{position:absolute;bottom:12px;left:0;right:0;display:flex;justify-content:center;pointer-events:none;z-index:30}
 .scroll-pill{background:linear-gradient(135deg,var(--purple),var(--pink));color:white;padding:10px 20px;border-radius:var(--r-pill);font-family:'Fredoka',sans-serif;font-size:.9rem;font-weight:700;box-shadow:0 6px 24px rgba(168,85,247,.5);transition:transform .3s cubic-bezier(.2,.9,.4,1.1),opacity .3s;cursor:pointer;border:none;white-space:nowrap;pointer-events:none;transform:translateY(80px);opacity:0}
 .scroll-pill.visible{transform:translateY(0);opacity:1;pointer-events:auto}
-</style>
-<style>
+
 /* ── CARDS ── */
 .a-card{background:white;border:2px solid var(--border);border-radius:var(--r);margin:8px 8px 0;padding:14px;box-shadow:var(--sh)}
 .a-title{font-size:1.05rem;font-weight:700;color:var(--text);margin-bottom:2px}
@@ -119,6 +150,44 @@ canvas.a-canvas{max-height:140px;width:100%}
 .chart-legend{display:flex;gap:12px;margin-top:8px}
 .leg{display:flex;align-items:center;gap:6px;font-size:.8rem;font-weight:700;color:var(--text3)}
 .leg-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+
+/* ── PREDICTION CARD ── */
+.prediction-card{background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(168,85,247,.05));border:2px solid var(--prediction);border-radius:var(--r);padding:14px;margin:8px 8px 0;position:relative;overflow:hidden}
+.prediction-card::before{content:'🔮';position:absolute;top:10px;right:10px;opacity:.2;font-size:2rem}
+.confidence-bar{height:4px;background:var(--purple-l);border-radius:99px;overflow:hidden;margin-top:8px}
+.confidence-fill{height:100%;background:linear-gradient(90deg,var(--purple),var(--prediction));transition:width .5s}
+
+/* ── RISK METER ── */
+.risk-meter{display:flex;gap:2px;height:60px;align-items:flex-end;margin-top:10px}
+.risk-bar{flex:1;background:var(--purple-l);border-radius:3px 3px 0 0;transition:all .3s;position:relative;min-height:3px}
+.risk-bar.high{background:var(--long)}
+.risk-bar.medium{background:var(--whale)}
+.risk-bar.low{background:var(--short)}
+.risk-bar::after{content:attr(data-val);position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font-size:.55rem;color:var(--text3);white-space:nowrap}
+
+/* ── CORRELATION MATRIX ── */
+.correlation-matrix{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:10px}
+.corr-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;border-radius:6px;cursor:pointer;transition:transform .2s}
+.corr-cell:hover{transform:scale(1.1);z-index:10}
+.corr-pos{background:rgba(16,185,129,.2);color:var(--short)}
+.corr-neg{background:rgba(244,63,94,.2);color:var(--long)}
+.corr-neu{background:var(--purple-l);color:var(--text3)}
+
+/* ── PATTERN VISUALIZER ── */
+.pattern-visualizer{height:120px;background:var(--bg);border-radius:var(--r-sm);margin-top:10px;position:relative;overflow:hidden}
+.pattern-wave{position:absolute;bottom:0;left:0;right:0;height:100%;display:flex;align-items:flex-end;gap:2px;padding:0 10px}
+.wave-bar{flex:1;background:linear-gradient(0deg,var(--purple),var(--cyan));border-radius:2px 2px 0 0;transition:height .3s}
+
+/* ── INSIGHT BUBBLE ── */
+.insight-bubble{background:white;border:2px solid var(--border);border-radius:var(--r);padding:12px;margin:8px 8px 0;font-size:.8rem;position:relative;animation:slideIn .3s ease-out}
+.insight-bubble::before{content:'💡';position:absolute;top:-10px;left:10px;background:white;padding:0 5px}
+@keyframes slideIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── AUTO TRADE BUTTON ── */
+.auto-trade-btn{background:linear-gradient(135deg,var(--short),var(--cyan));color:white;border:none;border-radius:var(--r-pill);padding:8px 16px;font-family:'Fredoka',sans-serif;font-size:.8rem;font-weight:700;cursor:pointer;margin-top:10px;width:100%;box-shadow:0 4px 15px rgba(16,185,129,.3);transition:all .2s}
+.auto-trade-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(16,185,129,.4)}
+.auto-trade-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
 /* ── OCTOPUS DASHBOARD ── */
 .oct-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:8px 8px 0}
 .oct-mini{background:white;border:2px solid var(--border);border-radius:var(--r-sm);padding:10px 8px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--sh)}
@@ -127,6 +196,7 @@ canvas.a-canvas{max-height:140px;width:100%}
 .oct-mini-lbl{font-size:.55rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.2px;margin-top:2px}
 .oct-mini-val{font-size:.95rem;font-weight:700;color:var(--purple);margin-top:1px}
 .oct-mini-sub{font-size:.6rem;color:var(--text3);margin-top:1px}
+
 /* ── TENTACLE STATUS ── */
 .tentacle-list{display:flex;flex-direction:column;gap:5px;margin-top:8px}
 .tentacle-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border-radius:var(--r-sm);border:1.5px solid var(--border)}
@@ -139,6 +209,7 @@ canvas.a-canvas{max-height:140px;width:100%}
 .sig-dn{background:var(--long-l);color:var(--long)}
 .sig-neu{background:var(--purple-l);color:var(--purple)}
 .sig-hot{background:var(--whale-l);color:var(--whale);animation:blink .8s infinite}
+
 /* ── OPPORTUNITY CARDS ── */
 .opp-card{background:white;border:2px solid var(--border);border-radius:var(--r);margin:8px 8px 0;padding:14px;position:relative;overflow:hidden;box-shadow:var(--sh)}
 .opp-card.red-alarm{border-color:var(--long);box-shadow:0 4px 20px rgba(244,63,94,.18);animation:alarmPulse 1.5s ease-in-out infinite}
@@ -151,6 +222,7 @@ canvas.a-canvas{max-height:140px;width:100%}
 .opp-lines{display:flex;flex-direction:column;gap:4px}
 .opp-line{display:flex;align-items:flex-start;gap:6px;font-size:.78rem;font-weight:600;color:var(--text);line-height:1.4}
 .opp-line-icon{flex-shrink:0;font-size:.85rem}
+
 /* ── ALARM LEVEL BADGE ── */
 .alarm-badge{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:var(--r-pill)}
 .alarm-red{background:var(--long-l);color:var(--long);border:1.5px solid var(--long)}
@@ -158,8 +230,7 @@ canvas.a-canvas{max-height:140px;width:100%}
 .alarm-yellow{background:var(--whale-l);color:var(--whale);border:1.5px solid var(--whale)}
 .alarm-green{background:var(--short-l);color:var(--short);border:1.5px solid var(--short)}
 .alarm-purple{background:var(--purple-l);color:var(--purple);border:1.5px solid var(--purple);animation:blink .6s infinite}
-</style>
-<style>
+
 /* ── GAMIFICATION ── */
 .xp-bar-wrap{height:5px;background:var(--purple-l);border-radius:99px;overflow:hidden;margin-top:3px}
 .xp-bar-fill{height:100%;background:linear-gradient(90deg,var(--purple),var(--pink));border-radius:99px;transition:width .6s cubic-bezier(.2,.9,.4,1.1)}
@@ -169,19 +240,7 @@ canvas.a-canvas{max-height:140px;width:100%}
 .badge-icon{font-size:1.4rem}
 .badge-name{font-size:.58rem;font-weight:700;color:var(--text3);text-align:center;line-height:1.2}
 .badge-item.earned .badge-name{color:var(--purple)}
-/* ── DEPTH CHART ── */
-.depth-wrap{display:flex;gap:2px;height:80px;align-items:flex-end;margin-top:8px}
-.depth-bid{background:linear-gradient(0deg,var(--short),rgba(16,185,129,.2));border-radius:3px 3px 0 0;min-width:3px;transition:height .3s}
-.depth-ask{background:linear-gradient(0deg,var(--long),rgba(244,63,94,.2));border-radius:3px 3px 0 0;min-width:3px;transition:height .3s}
-.depth-mid{width:2px;background:var(--purple);border-radius:2px;height:100%;flex-shrink:0}
-/* ── FUNDING TABLE ── */
-.fund-table{width:100%;border-collapse:collapse;margin-top:8px}
-.fund-table th{font-size:.6rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.2px;padding:4px 6px;text-align:left;border-bottom:1px solid var(--border)}
-.fund-table td{font-size:.78rem;font-weight:600;padding:5px 6px;border-bottom:1px solid rgba(168,85,247,.06);color:var(--text)}
-.fund-table tr:last-child td{border-bottom:none}
-.fund-pos{color:var(--long)}
-.fund-neg{color:var(--short)}
-.fund-score-bar{display:inline-block;height:6px;border-radius:99px;vertical-align:middle;margin-left:4px}
+
 /* ── WHALE TOAST ── */
 .toast-wrap{position:absolute;top:0;left:0;right:0;z-index:90;pointer-events:none;padding:calc(6px + var(--safe-t)) 8px 0}
 .whale-toast{background:linear-gradient(135deg,#fff7ed,#fef9c3);border:3px solid var(--whale);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 12px 40px rgba(245,158,11,.3);transform:translateY(-150%) scale(.92);transition:transform .4s cubic-bezier(.2,.9,.4,1.1),opacity .3s;opacity:0;pointer-events:none}
@@ -191,6 +250,7 @@ canvas.a-canvas{max-height:140px;width:100%}
 .toast-title{font-size:.88rem;font-weight:700;color:var(--whale)}
 .toast-msg{font-size:.78rem;font-weight:600;color:var(--text);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .toast-close{font-size:1.2rem;cursor:pointer;color:var(--text3);flex-shrink:0;padding:4px;line-height:1}
+
 /* ── MODAL ── */
 .modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(59,31,94,.5);backdrop-filter:blur(6px);display:flex;align-items:flex-end;justify-content:center;padding:0 0 calc(var(--bot-h) + var(--safe-b)) 0}
 .modal-overlay.hidden{display:none}
@@ -199,12 +259,14 @@ canvas.a-canvas{max-height:140px;width:100%}
 .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .modal-title{font-size:1.2rem;font-weight:700;color:var(--text)}
 .modal-close{font-size:1.3rem;cursor:pointer;color:var(--text3);background:var(--purple-l);border:none;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center}
+
 /* ── FILTER CHIPS ── */
 .fchip{background:white;border:2px solid var(--border);border-radius:8px;padding:4px 9px;font-family:'Fredoka',sans-serif;font-size:.72rem;font-weight:700;color:var(--text3);cursor:pointer;transition:all .12s;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-shadow:0 1px 4px rgba(168,85,247,.06)}
 .fchip:active{transform:scale(.92)}
 .fchip.active{background:linear-gradient(135deg,var(--purple),var(--purple-d));color:white;border-color:transparent;box-shadow:0 3px 10px rgba(168,85,247,.3)}
 .fchip.long-on{background:linear-gradient(135deg,var(--long),var(--orange));color:white;border-color:transparent}
 .fchip.short-on{background:linear-gradient(135deg,var(--short),var(--cyan));color:white;border-color:transparent}
+
 /* ── SETTINGS ── */
 .set-item{display:flex;align-items:center;gap:12px;background:var(--bg);border-radius:var(--r);padding:13px;margin-bottom:8px;border:2px solid var(--border);min-height:70px;box-shadow:0 2px 8px rgba(168,85,247,.06)}
 .set-icon{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0}
@@ -222,6 +284,7 @@ canvas.a-canvas{max-height:140px;width:100%}
 .thr-inp:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(168,85,247,.12)}
 .danger-btn{width:100%;margin-top:12px;background:var(--long-l);border:2.5px solid var(--long);border-radius:var(--r-pill);padding:12px;font-family:'Fredoka',sans-serif;font-size:.95rem;font-weight:700;color:var(--long);cursor:pointer;transition:.15s}
 .danger-btn:active{background:var(--long);color:white}
+
 /* ── BOTTOM NAV ── */
 .bottom-nav{height:calc(var(--bot-h) + var(--safe-b));background:white;border-top:2px solid var(--border);display:flex;justify-content:space-around;align-items:center;padding-bottom:var(--safe-b);padding-top:4px;flex-shrink:0;z-index:50;box-shadow:0 -4px 24px rgba(168,85,247,.1)}
 .nav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;font-family:'Fredoka',sans-serif;font-size:.72rem;font-weight:700;color:var(--text3);padding:5px 8px;border-radius:var(--r-sm);cursor:pointer;transition:.15s;min-width:55px;position:relative;min-height:50px}
@@ -231,14 +294,23 @@ canvas.a-canvas{max-height:140px;width:100%}
 .nav-btn.active .nav-icon{transform:scale(1.18)}
 .nav-badge{position:absolute;top:5px;right:8px;width:9px;height:9px;border-radius:50%;background:var(--long);border:2px solid white;display:none}
 .nav-badge.show{display:block;animation:blink 1s infinite}
+
+/* ── SUB TABS ── */
+.sub-tabs{display:flex;gap:0;background:var(--bg2);border-bottom:1.5px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+.sub-tabs::-webkit-scrollbar{display:none}
+.sub-tab{flex:1;min-width:60px;padding:7px 4px;font-family:'Fredoka',sans-serif;font-size:.72rem;font-weight:700;color:var(--text3);background:none;border:none;cursor:pointer;border-bottom:2.5px solid transparent;transition:.15s;white-space:nowrap;text-align:center}
+.sub-tab.active{color:var(--purple);border-bottom-color:var(--purple);background:var(--purple-l)}
+
 /* ── EMPTY ── */
 .empty{text-align:center;padding:48px 20px;color:var(--text3);font-size:.95rem;font-weight:600}
 .empty-icon{font-size:3.5rem;display:block;margin-bottom:12px}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 .float{animation:float 2.4s ease-in-out infinite}
+
 /* ── INK PARTICLE ── */
 .ink-particle{position:fixed;pointer-events:none;z-index:999;border-radius:50%;animation:inkSpread .8s ease-out forwards}
 @keyframes inkSpread{0%{transform:scale(0);opacity:.8}100%{transform:scale(1);opacity:0}}
+
 /* ── MISC ── */
 .conn-card{background:var(--bg);border-radius:var(--r-sm);padding:12px;margin-top:12px;border:2px solid var(--border)}
 .conn-row{display:flex;justify-content:space-between;padding:4px 0;font-size:.82rem;font-weight:600}
@@ -263,10 +335,7 @@ canvas.a-canvas{max-height:140px;width:100%}
 .act-col.ld{background:linear-gradient(0deg,var(--long),rgba(244,63,94,.25))}
 .act-col.sd{background:linear-gradient(0deg,var(--short),rgba(16,185,129,.25))}
 .act-col.mt{background:var(--purple-l)}
-/* ── SCROLL PILL ── */
-.scroll-pill-wrap{position:absolute;bottom:12px;left:0;right:0;display:flex;justify-content:center;pointer-events:none;z-index:30}
-.scroll-pill{background:linear-gradient(135deg,var(--purple),var(--pink));color:white;padding:10px 20px;border-radius:var(--r-pill);font-family:'Fredoka',sans-serif;font-size:.9rem;font-weight:700;box-shadow:0 6px 24px rgba(168,85,247,.4);transition:transform .3s cubic-bezier(.2,.9,.4,1.1),opacity .3s;cursor:pointer;border:none;white-space:nowrap;pointer-events:none;transform:translateY(80px);opacity:0}
-.scroll-pill.visible{transform:translateY(0);opacity:1;pointer-events:auto}
+
 /* ── FUND TABLE ── */
 .fund-table{width:100%;border-collapse:collapse;margin-top:8px}
 .fund-table th{font-size:.6rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.2px;padding:4px 6px;text-align:left;border-bottom:2px solid var(--border)}
@@ -275,9 +344,92 @@ canvas.a-canvas{max-height:140px;width:100%}
 .fund-pos{color:var(--long)}
 .fund-neg{color:var(--short)}
 .fund-score-bar{display:inline-block;height:6px;border-radius:99px;vertical-align:middle;margin-left:4px}
+
+/* ── FIRSAT TARAYICI ── */
+.opp-scanner-card{background:white;border:2px solid var(--border);border-radius:var(--r);margin:8px 8px 0;padding:14px;box-shadow:var(--sh);position:relative;overflow:hidden}
+.opp-scanner-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--purple),var(--pink),var(--cyan))}
+.opp-scanner-card.high{border-color:var(--long);box-shadow:0 4px 20px rgba(244,63,94,.15)}
+.opp-scanner-card.medium{border-color:var(--whale);box-shadow:0 4px 16px rgba(245,158,11,.12)}
+.opp-scanner-card.low{border-color:var(--short);box-shadow:0 4px 12px rgba(16,185,129,.1)}
+.opp-conf-bar{height:8px;background:var(--purple-l);border-radius:99px;overflow:hidden;margin:6px 0}
+.opp-conf-fill{height:100%;border-radius:99px;transition:width .6s cubic-bezier(.2,.9,.4,1.1)}
+.opp-detail-row{display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--bg);border-radius:8px;margin-top:4px;font-size:.75rem;font-weight:600;color:var(--text)}
+.opp-detail-lbl{color:var(--text3);min-width:80px;font-size:.7rem}
+
+/* ── BALİNA TAKİP ── */
+.whale-timeline{position:relative;padding:8px 0}
+.whale-tl-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.whale-tl-item:last-child{border:none}
+.whale-tl-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.whale-tl-dot.long{background:var(--long);box-shadow:0 0 0 3px var(--long-l)}
+.whale-tl-dot.short{background:var(--short);box-shadow:0 0 0 3px var(--short-l)}
+.whale-tl-dot.mega{background:var(--whale);box-shadow:0 0 0 4px var(--whale-l);animation:blink .8s infinite}
+.whale-score-ring{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;border:3px solid;flex-shrink:0}
+
+/* ── STRATEJİ SİMÜLATÖR ── */
+.strat-row{display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap}
+.strat-select{background:white;border:2px solid var(--border);border-radius:10px;padding:6px 10px;font-family:'Fredoka',sans-serif;font-size:.8rem;font-weight:600;color:var(--text);outline:none;cursor:pointer;flex:1;min-width:80px}
+.strat-select:focus{border-color:var(--purple)}
+.strat-input{background:white;border:2px solid var(--border);border-radius:10px;padding:6px 10px;font-family:'Fredoka',sans-serif;font-size:.8rem;font-weight:600;color:var(--text);outline:none;width:80px}
+.strat-input:focus{border-color:var(--purple)}
+.strat-result-card{background:var(--bg);border-radius:var(--r-sm);padding:10px 12px;margin-top:6px;border:1.5px solid var(--border)}
+.strat-metric{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:.82rem;font-weight:600}
+.strat-metric:last-child{border:none}
+.strat-metric-lbl{color:var(--text3)}
+.strat-metric-val{color:var(--text);font-weight:700}
+
+/* ── EĞİTİM MODU ── */
+.edu-step{background:white;border-radius:var(--r);padding:14px;margin-bottom:8px;border:2px solid var(--border);box-shadow:var(--sh);position:relative}
+.edu-step-num{position:absolute;top:-10px;left:14px;background:linear-gradient(135deg,var(--purple),var(--pink));color:white;font-size:.72rem;font-weight:700;padding:2px 10px;border-radius:var(--r-pill)}
+.edu-step-title{font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:6px;margin-top:4px}
+.edu-step-body{font-size:.82rem;font-weight:600;color:var(--text3);line-height:1.55}
+.edu-highlight{background:linear-gradient(135deg,var(--purple-l),var(--pink-l));border-radius:8px;padding:8px 10px;margin:6px 0;border-left:3px solid var(--purple);font-size:.8rem;font-weight:700;color:var(--text)}
+
+/* ── DESTEK/DİRENÇ ── */
+.sr-canvas-wrap{position:relative;margin-top:8px;border-radius:var(--r-sm);overflow:hidden;border:1.5px solid var(--border)}
+.sr-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.sr-legend-item{display:flex;align-items:center;gap:5px;font-size:.68rem;font-weight:700;color:var(--text3)}
+.sr-legend-dot{width:12px;height:8px;border-radius:3px;flex-shrink:0}
+
+/* ── PROFIT TRACKER ── */
+.profit-card{background:linear-gradient(135deg,rgba(34,197,94,.1),rgba(16,185,129,.05));border:2px solid var(--profit);border-radius:var(--r);padding:14px;margin:8px 8px 0}
+.profit-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.profit-title{font-size:1rem;font-weight:700;color:var(--text)}
+.profit-amount{font-size:1.3rem;font-weight:800;color:var(--profit)}
+.profit-loss{color:var(--loss)}
+.profit-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.profit-stat{background:white;border-radius:var(--r-sm);padding:8px;text-align:center;border:1.5px solid var(--border)}
+.profit-stat-lbl{font-size:.6rem;font-weight:700;color:var(--text3);text-transform:uppercase}
+.profit-stat-val{font-size:.9rem;font-weight:700;color:var(--text);margin-top:2px}
+
+/* ── SIGNAL CARD ── */
+.signal-card{background:white;border:2px solid var(--border);border-radius:var(--r);padding:12px;margin:8px 8px 0;position:relative;overflow:hidden}
+.signal-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--purple)}
+.signal-card.buy::before{background:var(--short)}
+.signal-card.sell::before{background:var(--long)}
+.signal-header{display:flex;justify-content:space-between;align-items:center}
+.signal-coin{font-size:1rem;font-weight:700;color:var(--text)}
+.signal-type{font-size:.75rem;font-weight:700;padding:3px 10px;border-radius:var(--r-pill);background:var(--purple-l);color:var(--purple)}
+.signal-type.buy{background:var(--short-l);color:var(--short)}
+.signal-type.sell{background:var(--long-l);color:var(--long)}
+.signal-conf{margin-top:6px;font-size:.7rem;color:var(--text3)}
+.signal-time{font-size:.6rem;color:var(--text3);margin-top:4px}
+
+/* ── LEARNING PROGRESS ── */
+.learning-progress{background:white;border:2px solid var(--border);border-radius:var(--r);padding:14px;margin:8px 8px 0}
+.learning-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.learning-title{font-size:1rem;font-weight:700;color:var(--text)}
+.learning-status{font-size:.7rem;color:var(--learning);font-weight:700}
+.learning-bar{height:8px;background:var(--purple-l);border-radius:99px;overflow:hidden}
+.learning-fill{height:100%;background:linear-gradient(90deg,var(--learning),var(--cyan));border-radius:99px;transition:width .5s}
+.learning-stats{display:flex;justify-content:space-between;margin-top:8px;font-size:.65rem;color:var(--text3)}
+
 @media(max-width:360px){.liq-row{grid-template-columns:26px 1fr auto auto}.usd-val{font-size:.78rem}.stat-num{font-size:.78rem}}
 </style>
 <body>
+<!-- Neural Network Background -->
+<canvas class="neural-net" id="neuralCanvas"></canvas>
+
 <div class="app">
 
   <!-- TOPBAR -->
@@ -286,13 +438,41 @@ canvas.a-canvas{max-height:140px;width:100%}
       <div class="led" id="wsLed"></div>
       <span id="wsStatus">BAĞLAN</span>
     </div>
-    <span class="logo">🐙 Ahtapot Sistem</span>
+    <span class="logo">🐙 Ahtapot Sistem <span style="font-size:.7rem;background:var(--purple);color:white;padding:2px 8px;border-radius:10px;margin-left:5px">v3 AI</span></span>
     <div style="flex:1"></div>
+    <div class="learning-indicator active" id="learningStatus">
+      <span>🧠 Öğreniyor</span>
+      <span id="learnCount">0 veri</span>
+    </div>
     <div class="xp-pill" id="xpPill" title="Seviye & XP">
       <span id="xpLevel">🦑 Lv1</span>
       <span id="xpVal">0 XP</span>
     </div>
     <button id="clearFeedBtn" title="Listeyi Temizle" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:4px 6px;border-radius:8px;color:var(--text3);transition:.15s;flex-shrink:0;line-height:1">🗑️</button>
+  </div>
+
+  <!-- AI STATS BAR -->
+  <div class="ai-stats-wrap">
+    <div class="ai-stat-card">
+      <div class="ai-stat-lbl">AI Doğruluk</div>
+      <div class="ai-stat-num" id="aiAccuracy" style="color:var(--purple)">%0</div>
+    </div>
+    <div class="ai-stat-card">
+      <div class="ai-stat-lbl">Tahmin</div>
+      <div class="ai-stat-num" id="activePredictions" style="color:var(--prediction)">0</div>
+    </div>
+    <div class="ai-stat-card">
+      <div class="ai-stat-lbl">Risk Skoru</div>
+      <div class="ai-stat-num" id="marketRisk" style="color:var(--long)">-</div>
+    </div>
+    <div class="ai-stat-card">
+      <div class="ai-stat-lbl">Örüntü</div>
+      <div class="ai-stat-num" id="patternCount" style="color:var(--neural)">0</div>
+    </div>
+    <div class="ai-stat-card">
+      <div class="ai-stat-lbl">Korelasyon</div>
+      <div class="ai-stat-num" id="corrStrength" style="color:var(--cyan)">-</div>
+    </div>
   </div>
 
   <!-- STATS -->
@@ -364,9 +544,40 @@ canvas.a-canvas{max-height:140px;width:100%}
       </div>
     </div>
 
-    <!-- ===== AHTAPOT DASHBOARD ===== -->
+    <!-- ===== AHTAPOT DASHBOARD (AI Gelişmiş) ===== -->
     <div class="page" id="tab-octopus">
       <div class="page-scroll">
+
+        <!-- AI Tahmin Kartı -->
+        <div class="prediction-card" id="aiPredictionCard">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div class="a-title" style="margin:0">🔮 AI Tahmin Motoru</div>
+            <div style="font-size:.65rem;color:var(--text3)" id="predUpdate">Güncelleniyor...</div>
+          </div>
+          <div id="aiPredictionContent">
+            <div style="color:var(--text3);font-size:.82rem;text-align:center;padding:10px">Veri toplanıyor...</div>
+          </div>
+          <div class="confidence-bar">
+            <div class="confidence-fill" id="confidenceBar" style="width:0%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:.6rem;color:var(--text3)">
+            <span>Güven: <span id="confPercent">0%</span></span>
+            <span>Sonraki tahmin: <span id="nextPredTime">-</span></span>
+          </div>
+        </div>
+
+        <!-- Risk Metre -->
+        <div class="a-card">
+          <div class="a-title">⚠️ Piyasa Risk Metresi</div>
+          <div class="a-sub">Anlık likidasyon baskısı dağılımı</div>
+          <div class="risk-meter" id="riskMeter"></div>
+          <div style="display:flex;justify-content:space-between;margin-top:16px;font-size:.65rem;color:var(--text3)">
+            <span>Düşük</span>
+            <span>Orta</span>
+            <span>Yüksek</span>
+            <span>Extreme</span>
+          </div>
+        </div>
 
         <!-- Fırsat Skoru + AI + Seviye -->
         <div class="oct-grid">
@@ -394,9 +605,22 @@ canvas.a-canvas{max-height:140px;width:100%}
 
         <!-- Ekstremite Durumu -->
         <div class="a-card">
-          <div class="a-title">🐙 Ekstremite Durumu</div>
-          <div class="a-sub" id="tentacleUyum">Veri bekleniyor...</div>
+          <div class="a-title">🐙 Neural Ekstremite Ağı</div>
+          <div class="a-sub" id="tentacleUyum">Sinir ağı bağlantıları analiz ediliyor...</div>
           <div class="tentacle-list" id="tentacleList"></div>
+          <div class="insight-bubble" id="neuralInsight" style="display:none">
+            <span id="insightText">Pattern tespit edildi!</span>
+          </div>
+        </div>
+
+        <!-- Korelasyon Matrisi -->
+        <div class="a-card">
+          <div class="a-title">🕸️ Coin Korelasyon Matrisi</div>
+          <div class="a-sub">Likidasyon davranışları arasındaki ilişkiler</div>
+          <div class="correlation-matrix" id="corrMatrix"></div>
+          <div style="margin-top:10px;font-size:.7rem;color:var(--text3);text-align:center">
+            Yeşil: Pozitif korelasyon | Kırmızı: Negatif korelasyon
+          </div>
         </div>
 
         <!-- Aktif Fırsatlar -->
@@ -404,7 +628,7 @@ canvas.a-canvas{max-height:140px;width:100%}
 
         <!-- Piyasa Yorumu -->
         <div class="a-card" id="marketCommentCard">
-          <div class="a-title">🧠 Piyasa Yorumu</div>
+          <div class="a-title">🧠 AI Piyasa Yorumu</div>
           <div id="mcLines"><div style="color:var(--text3);font-size:.82rem">Veri bekleniyor...</div></div>
         </div>
 
@@ -421,7 +645,106 @@ canvas.a-canvas{max-height:140px;width:100%}
       </div>
     </div>
 
-    <!-- ===== ANALYTICS PAGE ===== -->
+    <!-- ===== FIRSATLAR PAGE (Gelişmiş) ===== -->
+    <div class="page" id="tab-opps">
+      <div class="sub-tabs" id="oppSubTabs">
+        <button class="sub-tab active" data-sub="scanner">🎯 Tarayıcı</button>
+        <button class="sub-tab" data-sub="whale">🐋 Balinalar</button>
+        <button class="sub-tab" data-sub="srlines">📍 S/D Hatları</button>
+        <button class="sub-tab" data-sub="strategy">🧪 Simülatör</button>
+        <button class="sub-tab" data-sub="predictions">🔮 Tahminler</button>
+        <button class="sub-tab" data-sub="signals">📡 Sinyaller</button>
+        <button class="sub-tab" data-sub="edu">📚 Eğitim</button>
+      </div>
+      <div class="page-scroll" id="oppSubScroll">
+        <div id="sub-scanner">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 8px 0">
+            <div style="font-size:.72rem;font-weight:700;color:var(--text3)">Otomatik tarama — her 20sn</div>
+            <div id="scannerAge" style="font-size:.65rem;color:var(--text3)"></div>
+          </div>
+          <div id="scannerCards"><div class="a-card" style="margin-top:8px"><div style="color:var(--text3);font-size:.82rem;text-align:center;padding:12px">⏳ Veri bekleniyor...</div></div></div>
+        </div>
+        <div id="sub-whale" style="display:none">
+          <div class="a-card" style="margin-top:8px">
+            <div class="a-title">🐋 Balina Aktivite Skoru</div>
+            <div class="a-sub">Son 2 saatteki büyük likidasyonlar</div>
+            <div id="whaleScoreList"></div>
+          </div>
+          <div class="a-card" style="margin-top:6px">
+            <div class="a-title">🕐 Balina Zaman Tüneli</div>
+            <div id="whaleTlList"></div>
+          </div>
+        </div>
+        <div id="sub-srlines" style="display:none">
+          <div class="a-card" style="margin-top:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <div class="a-title" style="margin:0">📍 Destek/Direnç</div>
+              <select id="srCoinSelect" class="strat-select" style="flex:0;min-width:90px;font-size:.75rem"><option value="">Coin seç</option></select>
+            </div>
+            <div class="a-sub">Likit yoğunluğu + Order Book duvarları</div>
+            <div class="sr-legend">
+              <div class="sr-legend-item"><div class="sr-legend-dot" style="background:rgba(16,185,129,.6)"></div>Güçlü Destek</div>
+              <div class="sr-legend-item"><div class="sr-legend-dot" style="background:rgba(244,63,94,.6)"></div>Güçlü Direnç</div>
+              <div class="sr-legend-item"><div class="sr-legend-dot" style="background:rgba(245,158,11,.5)"></div>Potansiyel</div>
+            </div>
+            <div class="sr-canvas-wrap"><canvas id="srCanvas" style="width:100%;height:280px"></canvas></div>
+            <div id="srZoneList" style="margin-top:8px"></div>
+          </div>
+        </div>
+        <div id="sub-strategy" style="display:none">
+          <div class="a-card" style="margin-top:8px">
+            <div class="a-title">🧪 Strateji Simülatörü</div>
+            <div class="a-sub">Kendi kuralını yaz, geçmiş veriye test et</div>
+            <div id="stratConditions">
+              <div class="strat-row">
+                <span style="font-size:.72rem;font-weight:700;color:var(--text3);min-width:30px">EĞER</span>
+                <select class="strat-select sc-metric"><option value="cascade">Cascade Sayısı</option><option value="longPct">Long Yüzdesi</option><option value="whaleLiq">Balina Likit</option><option value="funding">Funding Rate</option><option value="vol">Toplam Hacim ($)</option></select>
+                <select class="strat-select sc-op"><option value="gt">Büyüktür</option><option value="lt">Küçüktür</option><option value="gte">≥</option><option value="lte">≤</option></select>
+                <input type="number" class="strat-input sc-val" placeholder="3">
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:6px">
+              <button id="addCondBtn" style="background:var(--purple-l);border:1.5px solid var(--border);border-radius:var(--r-pill);padding:6px 12px;font-family:'Fredoka',sans-serif;font-size:.78rem;font-weight:700;color:var(--purple);cursor:pointer">+ Koşul Ekle</button>
+              <select id="stratAction" class="strat-select" style="flex:1"><option value="buy">→ AL Sinyali</option><option value="sell">→ SAT Sinyali</option></select>
+            </div>
+            <button id="runStratBtn" style="width:100%;margin-top:10px;background:linear-gradient(135deg,var(--purple),var(--pink));border:none;border-radius:var(--r-pill);padding:11px;font-family:'Fredoka',sans-serif;font-size:.9rem;font-weight:700;color:white;cursor:pointer;box-shadow:0 4px 14px rgba(168,85,247,.3)">▶ Simülasyonu Çalıştır</button>
+            <div id="stratResults"></div>
+          </div>
+        </div>
+        <div id="sub-predictions" style="display:none">
+          <div class="a-card" style="margin-top:8px">
+            <div class="a-title">🔮 Gelecek Likidasyon Tahminleri</div>
+            <div class="a-sub">Makine öğrenmesi tabanlı tahmin modeli</div>
+            <div id="predictionList"></div>
+          </div>
+          <div class="a-card" style="margin-top:8px">
+            <div class="a-title">📊 Tahmin Doğruluk Geçmişi</div>
+            <canvas id="accuracyChart" style="max-height:150px"></canvas>
+          </div>
+        </div>
+        <div id="sub-signals" style="display:none">
+          <div class="a-card" style="margin-top:8px">
+            <div class="a-title">📡 AI Sinyal Merkezi</div>
+            <div class="a-sub">Gerçek zamanlı al/sat sinyalleri</div>
+            <div id="signalList"></div>
+          </div>
+          <div class="a-card" style="margin-top:8px">
+            <div class="a-title">💰 Sinyal Performansı</div>
+            <div id="signalPerformance"></div>
+          </div>
+        </div>
+        <div id="sub-edu" style="display:none">
+          <div class="a-card" style="margin-top:8px">
+            <div class="a-title">📚 Senaryo Kütüphanesi</div>
+            <div class="a-sub">Geçmiş piyasa olaylarından öğren</div>
+            <div id="eduScenarioList"></div>
+          </div>
+          <div id="eduActiveScenario"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ANALYTICS PAGE (Gelişmiş) ===== -->
     <div class="page" id="tab-analytics">
       <div class="page-scroll">
         <div class="a-card">
@@ -433,6 +756,22 @@ canvas.a-canvas{max-height:140px;width:100%}
             <div class="leg"><div class="leg-dot" style="background:var(--short)"></div>Short 😤</div>
           </div>
         </div>
+        
+        <!-- Pattern Görselleştirici -->
+        <div class="a-card">
+          <div class="a-title">🎼 Likidasyon Patternleri</div>
+          <div class="a-sub">Tekrar eden davranış örüntüleri</div>
+          <div class="pattern-visualizer" id="patternViz">
+            <div class="pattern-wave" id="waveContainer"></div>
+          </div>
+        </div>
+
+        <!-- AI Öğrenme Eğrisi -->
+        <div class="a-card">
+          <div class="a-title">🧠 AI Öğrenme Eğrisi</div>
+          <canvas id="learningChart" style="max-height:150px"></canvas>
+        </div>
+
         <div class="a-card">
           <div class="a-title">🏆 En Çok Yanan Coinler</div>
           <div class="a-sub">Toplam hacme göre</div>
@@ -569,6 +908,11 @@ canvas.a-canvas{max-height:140px;width:100%}
             <div class="set-inf"><div class="set-title">Mürekkep Efekti</div><div class="set-desc">Büyük yangınlarda parçacık animasyonu</div></div>
             <div class="toggle on" id="togInk"></div>
           </div>
+          <div class="set-item">
+            <div class="set-icon off" id="aiAutoIcon">🤖</div>
+            <div class="set-inf"><div class="set-title">AI Otomatik Sinyal</div><div class="set-desc">Yüksek güvenli tahminlerde bildirim</div></div>
+            <div class="toggle" id="togAiAuto"></div>
+          </div>
           <div style="margin-top:14px">
             <label class="inp-label" for="alertThr">🔔 Uyarı Sınırı ($)</label>
             <input type="number" id="alertThr" class="thr-inp" value="10000" step="1000">
@@ -588,8 +932,10 @@ canvas.a-canvas{max-height:140px;width:100%}
             <div class="conn-row"><span class="conn-lbl">Protokol</span><span class="conn-val">WebSocket</span></div>
             <div class="conn-row"><span class="conn-lbl">Akış</span><span class="conn-val">!forceOrder@arr</span></div>
             <div class="conn-row"><span class="conn-lbl">Fiyat Akışı</span><span class="conn-val">!miniTicker@arr</span></div>
+            <div class="conn-row"><span class="conn-lbl">AI Motor</span><span class="conn-val">SmartLearningEngine v3</span></div>
+            <div class="conn-row"><span class="conn-lbl">Firebase</span><span class="conn-val" id="fbStatus">Bağlanıyor...</span></div>
           </div>
-          <div class="footer-note">Binance Futures verisi kullanılmaktadır.<br>Bu uygulama Binance ile bağlantılı değildir 🐙</div>
+          <div class="footer-note">Binance Futures verisi kullanılmaktadır.<br>Bu uygulama Binance ile bağlantılı değildir 🐙<br><br>🧠 AI sistemi her likidasyondan öğrenir<br>🔮 Tahmin doğruluğu zamanla artar</div>
         </div>
       </div>
     </div>
@@ -603,20 +949,46 @@ canvas.a-canvas{max-height:140px;width:100%}
       <span class="nav-icon">⚡</span><span>Canlı</span>
     </button>
     <button class="nav-btn" data-tab="octopus">
-      <span class="nav-icon">🐙</span><span>Ahtapot</span>
+      <span class="nav-icon">🐙</span><span>AI</span>
+    </button>
+    <button class="nav-btn" data-tab="opps">
+      <span class="nav-icon">🎯</span><span>Fırsat</span>
     </button>
     <button class="nav-btn" data-tab="analytics">
       <span class="nav-icon">📊</span><span>Analiz</span>
     </button>
-    <button class="nav-btn" data-tab="filter">
-      <span class="nav-icon">🔍</span><span>Filtre</span>
-    </button>
     <button class="nav-btn" data-tab="settings">
-      <span class="nav-icon">⚙️</span><span>Ayarlar</span>
+      <span class="nav-icon">⚙️</span><span>Ayar</span>
     </button>
   </nav>
 </div><!-- /app -->
+
 <script>
+/* ═══════════════════ FIREBASE CONFIG ═══════════════════ */
+const firebaseConfig = {
+  apiKey: "AIzaSyDummyKeyForDemo",
+  authDomain: "liqidasyon.firebaseapp.com",
+  databaseURL: "https://liqidasyon-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "liqidasyon",
+  storageBucket: "liqidasyon.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef123456"
+};
+
+// Initialize Firebase
+let firebaseApp = null;
+let firebaseDB = null;
+let firebaseAuth = null;
+
+try {
+  firebaseApp = firebase.initializeApp(firebaseConfig);
+  firebaseDB = firebase.database();
+  firebaseAuth = firebase.auth();
+  console.log("✅ Firebase initialized");
+} catch(e) {
+  console.log("⚠️ Firebase init error:", e);
+}
+
 /* ═══════════════════ CONFIG ═══════════════════ */
 const WS_URL       = "wss://fstream.binance.com/ws/!forceOrder@arr";
 const MAX_ITEMS    = 300;
@@ -635,7 +1007,7 @@ let actData=Array(ACT_BARS).fill(null).map(()=>({vol:0,side:0}));
 let actCur={vol:0,side:0};
 let volTL=Array(TL_BUCKETS).fill(null).map(()=>({l:0,s:0}));
 let symMap=new Map();
-let volChart=null, donutChart=null;
+let volChart=null, donutChart=null, accuracyChart=null, learningChart=null;
 let stats={vol:0,longs:0,shorts:0,longVol:0,shortVol:0,biggest:0,biggestItem:null};
 const cascadeMap=new Map();
 const priceCache=new Map();
@@ -664,15 +1036,16 @@ const BADGES=[
   {id:"sharp",      icon:"🎯", name:"Keskin Nişancı",desc:"10 tahminde 8 doğru",        earned:false},
   {id:"speed",      icon:"🚀", name:"Hızlı Tetik",   desc:"5sn içinde fırsat",          earned:false},
   {id:"octopus_all",icon:"🕸️", name:"Ağ Ustası",     desc:"Tüm ekstremite aktif",       earned:false},
+  {id:"ai_master",  icon:"🧠", name:"AI Ustası",     desc:"100 doğru tahmin",           earned:false},
+  {id:"pattern_pro",icon:"🎼", name:"Pattern Pro",   desc:"50 pattern tespiti",         earned:false},
 ];
-let cascadeCount=0, whaleTotalDetected=0;
+let cascadeCount=0, whaleTotalDetected=0, correctPredictions=0, totalPredictions=0;
 
-try{const g=localStorage.getItem("oct_xp");if(g){const d=JSON.parse(g);xp=d.xp||0;level=d.level||1;BADGES.forEach(b=>{if(d.badges&&d.badges[b.id])b.earned=true})}}catch(e){}
-const saveXP=()=>{try{localStorage.setItem("oct_xp",JSON.stringify({xp,level,badges:Object.fromEntries(BADGES.map(b=>[b.id,b.earned]))}));}catch(e){}};
+try{const g=localStorage.getItem("oct_xp");if(g){const d=JSON.parse(g);xp=d.xp||0;level=d.level||1;correctPredictions=d.correctPredictions||0;totalPredictions=d.totalPredictions||0;BADGES.forEach(b=>{if(d.badges&&d.badges[b.id])b.earned=true})}}catch(e){}
+const saveXP=()=>{try{localStorage.setItem("oct_xp",JSON.stringify({xp,level,badges:Object.fromEntries(BADGES.map(b=>[b.id,b.earned])),correctPredictions,totalPredictions}));}catch(e){}};
 
 function addXP(amount,reason=""){
   xp+=amount;
-  // level up check
   for(let i=LEVELS.length-1;i>=0;i--){if(xp>=LEVELS[i].min){level=i+1;break;}}
   saveXP();
   updateXPUI();
@@ -697,7 +1070,6 @@ function updateXPUI(){
 }
 
 function showXPToast(amount,reason){
-  // reuse whale toast briefly
   const t=document.getElementById("whaleToast");
   const m=document.getElementById("toastMsg");
   if(!t||!m)return;
@@ -714,8 +1086,384 @@ function renderBadges(){
 }
 </script>
 <script>
+/* ═══════════════════ SMART LEARNING ENGINE ═══════════════════ */
+class SmartLearningEngine {
+  constructor() {
+    this.memory = {
+      patterns: [],
+      predictions: [],
+      accuracy: { correct: 0, total: 0, history: [] },
+      correlations: new Map(),
+      riskProfiles: new Map(),
+      symbolBehaviors: new Map(),
+      signals: [],
+      signalPerformance: { wins: 0, losses: 0, total: 0 }
+    };
+    this.neuralWeights = new Map();
+    this.learningRate = 0.1;
+    this.confidenceThreshold = 0.65;
+    this.lastPatternCheck = 0;
+  }
+
+  // Her likidasyonu öğrenme verisine dönüştür
+  learn(item) {
+    const symbol = item.symbol;
+    const side = item.side;
+    const value = item.valueUSD;
+    const time = item.time;
+    
+    // 1. Davranış profili güncelle
+    if (!this.memory.symbolBehaviors.has(symbol)) {
+      this.memory.symbolBehaviors.set(symbol, {
+        avgAmount: value,
+        avgInterval: 0,
+        lastTime: time,
+        cascadeCount: 0,
+        sideBias: side === 'SELL' ? 1 : -1,
+        volatility: 0,
+        history: []
+      });
+    } else {
+      const profile = this.memory.symbolBehaviors.get(symbol);
+      const timeDiff = time - profile.lastTime;
+      
+      // EMA güncelleme
+      profile.avgAmount = profile.avgAmount * 0.9 + value * 0.1;
+      profile.avgInterval = profile.avgInterval * 0.9 + timeDiff * 0.1;
+      profile.sideBias = profile.sideBias * 0.95 + (side === 'SELL' ? 0.05 : -0.05);
+      profile.lastTime = time;
+      profile.history.push({time, value, side});
+      if(profile.history.length > 50) profile.history.shift();
+      
+      // Volatilite hesapla
+      profile.volatility = Math.abs(profile.sideBias);
+    }
+
+    // 2. Pattern tespiti
+    this.detectAdvancedPattern(symbol, side, value, time);
+    
+    // 3. Korelasyon güncelleme
+    this.updateCorrelations(symbol, side, value, time);
+    
+    // 4. Risk profili güncelleme
+    this.updateRiskProfile(symbol);
+    
+    // 5. Tahmin doğruluk kontrolü
+    this.verifyPredictions(symbol, item);
+    
+    // 6. Sinyal performans kontrolü
+    this.checkSignalPerformance(symbol, item);
+    
+    // Firebase'e kaydet
+    this.saveToFirebase(symbol);
+  }
+
+  detectAdvancedPattern(symbol, side, value, time) {
+    const recent = items.filter(i => i.symbol === symbol && i.time > time - 300000);
+    if (recent.length < 3) return;
+
+    // Wyckoff benzeri accumulation/distribution tespiti
+    const values = recent.map(r => r.valueUSD);
+    const avg = values.reduce((a,b) => a+b, 0) / values.length;
+    const isAccumulation = value > avg * 1.5 && side === 'SELL';
+    const isDistribution = value > avg * 1.5 && side === 'BUY';
+
+    if (isAccumulation || isDistribution) {
+      const pattern = {
+        type: isAccumulation ? 'accumulation' : 'distribution',
+        symbol,
+        strength: value / avg,
+        timestamp: time,
+        confidence: Math.min(0.9, recent.length / 10)
+      };
+      this.memory.patterns.push(pattern);
+      if (this.memory.patterns.length > 100) this.memory.patterns.shift();
+      
+      // XP kazan
+      addXP(50, `Pattern tespiti: ${pattern.type}`);
+      
+      // Badge kontrolü
+      if(this.memory.patterns.length >= 50) checkBadge('pattern_pro');
+    }
+
+    // Cascade öngörüsü
+    if (recent.length >= 3) {
+      const last3 = recent.slice(0, 3);
+      const accelerating = last3[0].valueUSD > last3[1].valueUSD * 1.2;
+      
+      if (accelerating) {
+        this.addPrediction({
+          symbol,
+          type: 'cascade_continuation',
+          probability: 0.75,
+          timeframe: 60000,
+          timestamp: time,
+          direction: side === 'SELL' ? 'DOWN' : 'UP'
+        });
+      }
+    }
+
+    // Smart signal generation
+    this.generateSmartSignal(symbol, side, value, time, recent);
+  }
+
+  generateSmartSignal(symbol, side, value, time, recent) {
+    const profile = this.memory.symbolBehaviors.get(symbol);
+    if(!profile) return;
+    
+    // Yüksek güvenli sinyal koşulları
+    const conditions = {
+      cascade: recent.length >= 5,
+      whale: value >= 100000,
+      momentum: profile.volatility > 0.7,
+      fundingExtreme: this.checkFundingExtreme(symbol)
+    };
+    
+    let confidence = 0;
+    let signalType = null;
+    
+    if(conditions.cascade && conditions.momentum) {
+      confidence = 0.8;
+      signalType = side === 'SELL' ? 'BUY' : 'SELL'; // Karşı yön
+    } else if(conditions.whale && conditions.fundingExtreme) {
+      confidence = 0.75;
+      signalType = side === 'SELL' ? 'BUY' : 'SELL';
+    }
+    
+    if(confidence >= this.confidenceThreshold && signalType) {
+      const signal = {
+        id: Date.now() + Math.random(),
+        symbol,
+        type: signalType,
+        confidence,
+        timestamp: time,
+        conditions,
+        entryPrice: priceCache.get(symbol),
+        status: 'active'
+      };
+      this.memory.signals.unshift(signal);
+      if(this.memory.signals.length > 50) this.memory.signals.pop();
+      
+      // Bildirim gönder
+      if(cfg.aiAuto) {
+        this.sendSignalNotification(signal);
+      }
+    }
+  }
+
+  checkFundingExtreme(symbol) {
+    const rate = fundingCache.get(symbol);
+    if(!rate) return false;
+    return Math.abs(rate) > 0.0005;
+  }
+
+  sendSignalNotification(signal) {
+    const b = base(signal.symbol);
+    if(cfg.desktop && Notification.permission === "granted") {
+      new Notification(`🎯 AI Sinyal: ${b}`, {
+        body: `${signal.type === 'BUY' ? '📈 AL' : '📉 SAT'} - Güven: %${(signal.confidence*100).toFixed(0)}`,
+        icon: '🐙'
+      });
+    }
+  }
+
+  checkSignalPerformance(symbol, item) {
+    const activeSignals = this.memory.signals.filter(s => 
+      s.symbol === symbol && s.status === 'active'
+    );
+    
+    activeSignals.forEach(signal => {
+      const currentPrice = priceCache.get(symbol);
+      if(!currentPrice || !signal.entryPrice) return;
+      
+      const change = ((currentPrice - signal.entryPrice) / signal.entryPrice) * 100;
+      const isProfit = (signal.type === 'BUY' && change > 0.5) || (signal.type === 'SELL' && change < -0.5);
+      const isLoss = (signal.type === 'BUY' && change < -0.3) || (signal.type === 'SELL' && change > 0.3);
+      
+      if(isProfit) {
+        signal.status = 'win';
+        this.memory.signalPerformance.wins++;
+        this.memory.signalPerformance.total++;
+        addXP(100, 'Başarılı sinyal!');
+      } else if(isLoss) {
+        signal.status = 'loss';
+        this.memory.signalPerformance.losses++;
+        this.memory.signalPerformance.total++;
+      }
+    });
+  }
+
+  updateCorrelations(symbol, side, value, time) {
+    const window = 60000;
+    const related = items.filter(i => 
+      i.symbol !== symbol && 
+      Math.abs(i.time - time) < window &&
+      i.side === side
+    );
+
+    related.forEach(rel => {
+      const key = [symbol, rel.symbol].sort().join('-');
+      const current = this.memory.correlations.get(key) || { score: 0, count: 0 };
+      
+      const timeDiff = Math.abs(time - rel.time);
+      const correlation = 1 - (timeDiff / window);
+      
+      current.score = (current.score * current.count + correlation) / (current.count + 1);
+      current.count++;
+      this.memory.correlations.set(key, current);
+    });
+  }
+
+  updateRiskProfile(symbol) {
+    const recent = items.filter(i => i.symbol === symbol && i.time > Date.now() - 600000);
+    const longVol = recent.filter(i => i.side === 'SELL').reduce((s,i) => s+i.valueUSD, 0);
+    const shortVol = recent.filter(i => i.side === 'BUY').reduce((s,i) => s+i.valueUSD, 0);
+    const total = longVol + shortVol;
+    
+    if(total === 0) return;
+    
+    const imbalance = Math.abs(longVol - shortVol) / total;
+    const intensity = recent.length / 10;
+    
+    const riskScore = Math.min(10, (imbalance * 5) + (intensity * 5));
+    
+    this.memory.riskProfiles.set(symbol, {
+      score: riskScore,
+      longPressure: longVol / total,
+      shortPressure: shortVol / total,
+      lastUpdate: Date.now()
+    });
+  }
+
+  addPrediction(pred) {
+    pred.id = Date.now() + Math.random();
+    pred.verified = false;
+    this.memory.predictions.push(pred);
+    if(this.memory.predictions.length > 30) this.memory.predictions.shift();
+    totalPredictions++;
+    saveXP();
+  }
+
+  verifyPredictions(symbol, item) {
+    const pending = this.memory.predictions.filter(p => 
+      p.symbol === symbol && 
+      !p.verified && 
+      Date.now() - p.timestamp < p.timeframe * 2
+    );
+
+    pending.forEach(pred => {
+      pred.verified = true;
+      pred.success = (pred.type === 'cascade_continuation' && item.valueUSD > 50000) ||
+                     (pred.type === 'price_move' && Math.abs(item.price - pred.target) < pred.target * 0.01);
+      
+      if(pred.success) {
+        this.memory.accuracy.correct++;
+        correctPredictions++;
+        addXP(100, 'Doğru tahmin!');
+        
+        // Badge kontrolü
+        if(correctPredictions >= 100) checkBadge('ai_master');
+      }
+      this.memory.accuracy.total++;
+      
+      this.memory.accuracy.history.push({
+        time: Date.now(),
+        accuracy: (this.memory.accuracy.correct / this.memory.accuracy.total) * 100
+      });
+      if(this.memory.accuracy.history.length > 100) this.memory.accuracy.history.shift();
+      
+      saveXP();
+    });
+  }
+
+  getPrediction(symbol) {
+    const profile = this.memory.symbolBehaviors.get(symbol);
+    const risk = this.memory.riskProfiles.get(symbol);
+    
+    if(!profile || !risk) return null;
+
+    const now = Date.now();
+    const timeSinceLast = now - profile.lastTime;
+    const expectedInterval = profile.avgInterval;
+    
+    const timeToNext = Math.max(0, expectedInterval - timeSinceLast);
+    const probability = timeToNext < 30000 ? 0.8 : 0.4;
+    
+    const direction = profile.sideBias > 0.3 ? 'SELL' : profile.sideBias < -0.3 ? 'BUY' : 'MIXED';
+    
+    return {
+      symbol,
+      timeToNext,
+      probability,
+      direction,
+      riskScore: risk.score,
+      expectedAmount: profile.avgAmount * (1 + risk.score / 10)
+    };
+  }
+
+  getCorrelations(symbol) {
+    const result = [];
+    this.memory.correlations.forEach((data, key) => {
+      if(key.includes(symbol)) {
+        const other = key.replace(symbol, '').replace('-', '');
+        result.push({ symbol: other, score: data.score, count: data.count });
+      }
+    });
+    return result.sort((a,b) => b.score - a.score).slice(0, 5);
+  }
+
+  getMarketRisk() {
+    let totalRisk = 0;
+    let count = 0;
+    this.memory.riskProfiles.forEach((profile) => {
+      totalRisk += profile.score;
+      count++;
+    });
+    return count > 0 ? (totalRisk / count).toFixed(1) : 0;
+  }
+
+  async saveToFirebase(symbol) {
+    if(!firebaseDB) return;
+    
+    try {
+      const key = base(symbol);
+      const data = {
+        behavior: this.memory.symbolBehaviors.get(symbol),
+        risk: this.memory.riskProfiles.get(symbol),
+        lastUpdate: Date.now()
+      };
+      await firebaseDB.ref(`ai_data/${key}`).set(data);
+    } catch(e) {
+      console.log('Firebase save error:', e);
+    }
+  }
+
+  async loadFromFirebase() {
+    if(!firebaseDB) return;
+    
+    try {
+      const snapshot = await firebaseDB.ref('ai_data').once('value');
+      const data = snapshot.val();
+      if(data) {
+        Object.entries(data).forEach(([key, value]) => {
+          if(value.behavior) this.memory.symbolBehaviors.set(key + 'USDT', value.behavior);
+          if(value.risk) this.memory.riskProfiles.set(key + 'USDT', value.risk);
+        });
+      }
+      document.getElementById('fbStatus').textContent = '✅ Bağlı';
+    } catch(e) {
+      console.log('Firebase load error:', e);
+      document.getElementById('fbStatus').textContent = '⚠️ Yerel';
+    }
+  }
+}
+
+// Global AI Engine
+const AI = new SmartLearningEngine();
+</script>
+<script>
 /* ═══════════════════ SETTINGS ═══════════════════ */
-let cfg={sound:true,desktop:false,whale:true,alertThr:10000,whaleSz:500000,volume:0.5,soundProfile:"classic",ink:true};
+let cfg={sound:true,desktop:false,whale:true,alertThr:10000,whaleSz:500000,volume:0.5,soundProfile:"classic",ink:true,aiAuto:false};
 try{const s=localStorage.getItem("oct_cfg");if(s)cfg=Object.assign(cfg,JSON.parse(s));}catch(e){}
 const saveCfg=()=>{try{localStorage.setItem("oct_cfg",JSON.stringify(cfg));}catch(e){}};
 
@@ -751,7 +1499,7 @@ const D={
   feedBadge:$("feedBadge"),clearFeedBtn:$("clearFeedBtn"),
   volSlider:$("volSlider"),volPct:$("volPct"),testSoundBtn:$("testSoundBtn"),soundOptions:$("soundOptions"),
   statOctScore:$("statOctScore"),
-  pages:{feed:$("tab-feed"),octopus:$("tab-octopus"),analytics:$("tab-analytics"),filter:$("tab-filter"),settings:$("tab-settings")}
+  pages:{feed:$("tab-feed"),octopus:$("tab-octopus"),analytics:$("tab-analytics"),filter:$("tab-filter"),settings:$("tab-settings"),opps:$("tab-opps")}
 };
 
 /* ═══════════════════ AUDIO ═══════════════════ */
@@ -771,7 +1519,6 @@ function beep(whale=false,isLong=false){
       return;
     }
     if(profile==="octopus"){
-      // Ahtapot sesi: gliding sine
       const o=ctx.createOscillator();o.connect(g);o.type="sine";
       o.frequency.setValueAtTime(isLong?300:600,ctx.currentTime);
       o.frequency.exponentialRampToValueAtTime(isLong?150:900,ctx.currentTime+.25);
@@ -863,7 +1610,6 @@ function getLagStats(symbol,side){
   const key=base(symbol);const mem=memCache[key];
   if(!mem||!mem.lagProfiles||!mem.lagProfiles[side]||mem.lagProfiles[side].length<3)return null;
   const lags=mem.lagProfiles[side];
-  // Geçersiz lag değerlerini filtrele (0 veya negatif lag anlamsız)
   const validLags=lags.filter(l=>l.lag>0&&l.lag<60&&l.recovery!=null);
   if(validLags.length<3)return null;
   const avgLag=validLags.reduce((s,l)=>s+l.lag,0)/validLags.length;
@@ -926,7 +1672,7 @@ async function computeLag(symbol,side,liqTime,liqPrice){
 </script>
 <script>
 /* ═══════════════════ PROCESS LIQUIDATION ═══════════════════ */
-function addItem(item){
+const originalAddItem = function(item){
   const v=item.valueUSD;
   const isL=item.side==="SELL";
   stats.vol+=v;
@@ -974,6 +1720,162 @@ function addItem(item){
   const onFeed=D.pages.feed.classList.contains("active");
   if(!onFeed){unread++;D.feedBadge.classList.add("show");}
   if(!paused||sortMode==="size")renderFeed();
+};
+
+function addItem(item){
+  // Orijinal işlemler
+  originalAddItem(item);
+  
+  // AI Öğrenme
+  AI.learn(item);
+  
+  // UI Güncellemeleri
+  updateAIStats();
+  renderPredictions();
+  renderCorrelationMatrix();
+  renderRiskMeter();
+  updatePatternViz();
+  checkSmartAlerts(item);
+}
+
+function updateAIStats(){
+  const accuracy = AI.memory.accuracy.total > 0 
+    ? ((AI.memory.accuracy.correct / AI.memory.accuracy.total) * 100).toFixed(1) 
+    : 0;
+  
+  document.getElementById('aiAccuracy').textContent = `%${accuracy}`;
+  document.getElementById('activePredictions').textContent = AI.memory.predictions.filter(p => !p.verified).length;
+  document.getElementById('patternCount').textContent = AI.memory.patterns.length;
+  document.getElementById('marketRisk').textContent = AI.getMarketRisk();
+  document.getElementById('learnCount').textContent = `${AI.memory.accuracy.total} veri`;
+  
+  let totalCorr = 0;
+  AI.memory.correlations.forEach(c => totalCorr += c.score);
+  const avgCorr = AI.memory.correlations.size > 0 
+    ? (totalCorr / AI.memory.correlations.size).toFixed(2) 
+    : '-';
+  document.getElementById('corrStrength').textContent = avgCorr;
+}
+
+function renderPredictions(){
+  const container = document.getElementById('predictionList');
+  if(!container) return;
+  
+  const predictions = AI.memory.predictions.slice(-5).reverse();
+  
+  if(predictions.length === 0){
+    container.innerHTML = '<div style="color:var(--text3);font-size:.82rem;text-align:center;padding:12px">Henüz tahmin yok...</div>';
+    return;
+  }
+  
+  container.innerHTML = predictions.map(p => {
+    const isVerified = p.verified;
+    const statusColor = isVerified ? (p.success ? 'var(--short)' : 'var(--long)') : 'var(--prediction)';
+    const statusIcon = isVerified ? (p.success ? '✅' : '❌') : '⏳';
+    
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--bg);border-radius:8px;margin-bottom:6px;border-left:3px solid ${statusColor}">
+        <div>
+          <div style="font-size:.85rem;font-weight:700">${p.symbol} - ${p.type}</div>
+          <div style="font-size:.7rem;color:var(--text3)">Olasılık: %${(p.probability*100).toFixed(0)}</div>
+        </div>
+        <div style="font-size:1.2rem">${statusIcon}</div>
+      </div>
+    `;
+  }).join('');
+  
+  // AI Prediction Card güncelleme
+  const activePred = AI.memory.predictions.find(p => !p.verified);
+  if(activePred){
+    const content = document.getElementById('aiPredictionContent');
+    const confBar = document.getElementById('confidenceBar');
+    const confText = document.getElementById('confPercent');
+    
+    if(content){
+      content.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:1.1rem;font-weight:700;color:var(--prediction)">${activePred.symbol}</div>
+            <div style="font-size:.8rem;color:var(--text3)">${activePred.type}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:1.3rem;font-weight:800;color:var(--purple)">%${(activePred.probability*100).toFixed(0)}</div>
+            <div style="font-size:.65rem;color:var(--text3)">güven</div>
+          </div>
+        </div>
+      `;
+    }
+    if(confBar) confBar.style.width = `${activePred.probability * 100}%`;
+    if(confText) confText.textContent = `${(activePred.probability*100).toFixed(0)}%`;
+  }
+}
+
+function renderCorrelationMatrix(){
+  const container = document.getElementById('corrMatrix');
+  if(!container) return;
+  
+  const coins = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE'];
+  let html = '';
+  
+  coins.forEach(coin1 => {
+    coins.forEach(coin2 => {
+      if(coin1 === coin2){
+        html += `<div class="corr-cell" style="background:var(--purple);color:white">${coin1}</div>`;
+      } else {
+        const key = [`${coin1}USDT`, `${coin2}USDT`].sort().join('-');
+        const corr = AI.memory.correlations.get(key);
+        const score = corr ? corr.score : 0;
+        const cls = score > 0.6 ? 'corr-pos' : score < -0.6 ? 'corr-neg' : 'corr-neu';
+        const display = score !== 0 ? score.toFixed(2) : '-';
+        html += `<div class="corr-cell ${cls}" title="${coin1}-${coin2}: ${display}">${display}</div>`;
+      }
+    });
+  });
+  
+  container.innerHTML = html;
+}
+
+function renderRiskMeter(){
+  const container = document.getElementById('riskMeter');
+  if(!container) return;
+  
+  const risk = parseFloat(AI.getMarketRisk());
+  const bars = 10;
+  let html = '';
+  
+  for(let i = 0; i < bars; i++){
+    const threshold = (i + 1) * (10 / bars);
+    const active = risk >= threshold;
+    const cls = i < 3 ? 'low' : i < 7 ? 'medium' : 'high';
+    const height = active ? (20 + (i * 8)) : 10;
+    
+    html += `<div class="risk-bar ${active ? cls : ''}" style="height:${height}%" data-val="${active ? (i+1)*10 : ''}%"></div>`;
+  }
+  
+  container.innerHTML = html;
+}
+
+function checkSmartAlerts(item){
+  const pred = AI.getPrediction(item.symbol);
+  if(pred && pred.riskScore > 7 && pred.probability > 0.7){
+    if(cfg.whale && item.valueUSD > cfg.whaleSz * 0.5){
+      showToast(item.symbol.replace('USDT', ''), item.valueUSD, item.side, `🔮 AI Risk: ${pred.riskScore}/10`);
+    }
+  }
+}
+
+function updatePatternViz(){
+  const container = document.getElementById('waveContainer');
+  if(!container) return;
+  
+  const patterns = AI.memory.patterns.slice(-20);
+  const maxStrength = Math.max(...patterns.map(p => p.strength), 1);
+  
+  container.innerHTML = patterns.map(p => {
+    const height = (p.strength / maxStrength) * 100;
+    const color = p.type === 'accumulation' ? 'var(--long)' : 'var(--short)';
+    return `<div class="wave-bar" style="height:${height}%;background:${color};opacity:0.7"></div>`;
+  }).join('');
 }
 
 function updateBanner(){
@@ -986,12 +1888,12 @@ function updateBanner(){
 
 /* ═══════════════════ WHALE TOAST ═══════════════════ */
 let toastTimer=null;
-function showToast(sym,val,side){
+function showToast(sym,val,side,extra=""){
   const lbl=side==="SELL"?"LONG YANDI":"SHORT YANDI";
   const lagSt=getLagStats(sym+"USDT",side);
   let lagTxt="";
   if(lagSt&&lagSt.n>=3){const dt=side==="SELL"?"dip":"tepe";lagTxt=" ⏱️ ~"+lagSt.avgLag+"sn'de "+dt;}
-  D.toastMsg.textContent=sym+"  "+fmt(val)+"  "+lbl+lagTxt;
+  D.toastMsg.textContent=sym+"  "+fmt(val)+"  "+lbl+lagTxt+(extra?" | "+extra:"");
   D.toast.style.borderColor="var(--whale)";
   D.toast.classList.add("show");
   haptic(true);
@@ -1035,7 +1937,6 @@ function renderFeed(){
     else if(cascadeInfo.type==="warning")statusBadge='<span class="status-badge warn-b">⚠️'+cascadeInfo.count+'x</span>';
     else if(isW)statusBadge='<span class="status-badge whale-b">🐋</span>';
 
-    // Delta tag — likit fiyatı vs anlık fiyat
     const liveNow=priceCache.get(item.symbol);
     let deltaHtml='<span class="delta-tag delta-wait">—</span>';
     if(liveNow&&item.price&&item.price>0){
@@ -1046,7 +1947,6 @@ function renderFeed(){
       else deltaHtml='<span class="delta-tag delta-dn">'+sign+delta.toFixed(2)+'%</span>';
     }
 
-    // Sinyal özeti
     const sig=getSignalComment(item,cascadeInfo);
     const sigLine=cascadeInfo.type!=="normal"||isW
       ?'<div style="font-size:.62rem;font-weight:700;color:'+color+';margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+sig.main+'</div>'
@@ -1090,7 +1990,6 @@ function updateStatsUI(){
   const tot=stats.longs+stats.shorts;
   D.ratio.style.width=tot===0?"50%":((stats.longs/tot)*100)+"%";
   if(donutChart){donutChart.data.datasets[0].data=[stats.longs,stats.shorts];donutChart.update("none");}
-  // Octopus score
   const octScore=calcOctopusScore();
   D.statOctScore.textContent=octScore+"/100";
   D.statOctScore.style.color=octScore>=70?"var(--long)":octScore>=40?"var(--whale)":"var(--cyan)";
@@ -1100,17 +1999,13 @@ function updateStatsUI(){
 function calcOctopusScore(){
   if(!stats.vol)return 0;
   let score=0;
-  // Likit yoğunluğu
   const tot=stats.longs+stats.shorts;
   if(tot>0)score+=Math.min(30,tot/2);
-  // Cascade coinler
   let cascCount=0;
   cascadeMap.forEach((arr,sym)=>{const fresh=arr.filter(x=>x.time>Date.now()-60000);if(fresh.length>=3)cascCount++;});
   score+=Math.min(30,cascCount*10);
-  // Hacim
   if(stats.vol>1000000)score+=20;
   else if(stats.vol>100000)score+=10;
-  // Balina
   if(stats.biggestItem&&stats.biggestItem.valueUSD>=cfg.whaleSz)score+=20;
   return Math.min(100,Math.round(score));
 }
@@ -1129,14 +2024,12 @@ const TENTACLES=[
 
 function calcTentLiq(){const tot=stats.longs+stats.shorts;return Math.min(100,tot*3);}
 function calcTentSocial(){
-  // Simüle — cascade ve hacim bazlı
   const tot=stats.longs+stats.shorts;
   const lp=tot>0?(stats.longs/tot)*100:50;
   if(lp>70||lp<30)return 75;
   return 40;
 }
 function calcTentFunding(){
-  // fundingCache'den hesapla
   if(!fundingCache.size)return 0;
   let maxScore=0;
   fundingCache.forEach(rate=>{const s=Math.min(100,Math.abs(rate)*4000);if(s>maxScore)maxScore=s;});
@@ -1154,7 +2047,6 @@ function calcTentLPL(){
   return Math.min(100,found*20);
 }
 function calcTentAI(){
-  // Uyumlu ekstremite sayısına göre
   const scores=TENTACLES.slice(0,7).map(t=>t.score());
   const high=scores.filter(s=>s>=60).length;
   return Math.round((high/7)*100);
@@ -1188,7 +2080,6 @@ function renderTentacles(){
     </div>`;
   }).join("");
 
-  // AI tahmin
   const aiScore=scores[7].s;
   const aiEl=document.getElementById("octAiPred");
   const aiConf=document.getElementById("octAiConf");
@@ -1199,16 +2090,13 @@ function renderTentacles(){
   }
   if(aiConf)aiConf.textContent="Güven: "+highCount+"/8";
 
-  // Fırsat skoru
   const oppScore=calcOctopusScore();
   const oppEl=document.getElementById("octOppScore");
   const oppLbl=document.getElementById("octOppLabel");
   if(oppEl){oppEl.textContent=oppScore+"/100";oppEl.style.color=oppScore>=70?"var(--long)":oppScore>=40?"var(--whale)":"var(--cyan)";}
   if(oppLbl)oppLbl.textContent=oppScore>=70?"🔥 YÜKSEK":oppScore>=40?"⚡ ORTA":"😴 DÜŞÜK";
 
-  // Fırsat kartları
   renderOppCards(scores);
-  // Funding tablosu
   renderFundingTable();
 }
 
@@ -1230,7 +2118,6 @@ function renderOppCards(tentScores){
     const hc=hotCoins[0];
     const dir=hc.side==="SELL"?"📉 Short fırsatı":"📈 Long fırsatı";
     const alarmCls=hc.count>=5?"red-alarm":"orange-alarm";
-    // Lag sayacı ekle
     const lastCoinItem=items.find(i=>i.symbol===hc.symbol);
     const lagSt=lastCoinItem?getLagStats(hc.symbol,lastCoinItem.side):null;
     let lagLine=null;
@@ -1250,7 +2137,7 @@ function renderOppCards(tentScores){
     cards.push({cls:alarmCls,title:"⚡ Cascade: "+hc.sym,score:Math.min(95,hc.count*15),alarmLvl:hc.count>=5?"alarm-red":"alarm-orange",alarmTxt:hc.count>=5?"🔴 ACİL":"🟠 GÜÇLÜ",lines});
   }
 
-  // ── Lag fırsatı — son likit için sayaç ──
+  // ── Lag fırsatı ──
   const recentItems=items.filter(i=>i.time>now-120000&&i.valueUSD>=cfg.alertThr);
   const lagOpps=[];
   const seenSyms=new Set();
@@ -1309,7 +2196,7 @@ function renderOppCards(tentScores){
           {icon:"⚠️",txt:"Bu seviyede yeni likit dalgası tetiklenebilir"},
         ]
       });
-      break; // max 1 LPL kartı
+      break;
     }
   }
 
@@ -1353,7 +2240,23 @@ function renderOppCards(tentScores){
     }
   }
 
-  // Skora göre sırala
+  // ── AI Sinyal Fırsatı ──
+  const aiSignals = AI.memory.signals.filter(s => s.status === 'active').slice(0, 1);
+  aiSignals.forEach(sig => {
+    cards.push({
+      cls: sig.confidence >= 0.8 ? 'red-alarm' : 'orange-alarm',
+      title: `🤖 AI Sinyal: ${base(sig.symbol)}`,
+      score: Math.round(sig.confidence * 100),
+      alarmLvl: sig.confidence >= 0.8 ? 'alarm-red' : 'alarm-orange',
+      alarmTxt: sig.confidence >= 0.8 ? '🔴 YÜKSEK GÜVEN' : '🟠 ORTA GÜVEN',
+      lines: [
+        {icon: sig.type === 'BUY' ? '📈' : '📉', txt: `${sig.type === 'BUY' ? 'AL' : 'SAT'} Sinyali`},
+        {icon: '🎯', txt: `Güven: %${(sig.confidence * 100).toFixed(0)}`},
+        {icon: '💡', txt: 'AI tarafından otomatik üretildi'}
+      ]
+    });
+  });
+
   cards.sort((a,b)=>b.score-a.score);
 
   if(!cards.length){
@@ -1376,17 +2279,15 @@ function renderOppCards(tentScores){
 </script>
 <script>
 /* ═══════════════════ FUNDING CACHE + TABLE ═══════════════════ */
-const fundingCache=new Map(); // symbol -> rate
+const fundingCache=new Map();
 let fundingLastFetch=0;
 
 async function fetchFundingRates(){
   const now=Date.now();
-  if(now-fundingLastFetch<60000)return; // 1dk cache
+  if(now-fundingLastFetch<60000)return;
   fundingLastFetch=now;
   try{
-    // Top coins from symMap
     const topCoins=[...symMap.entries()].sort((a,b)=>b[1].total-a[1].total).slice(0,10).map(([s])=>s+"USDT");
-    // Also always include BTC, ETH
     const coins=[...new Set(["BTCUSDT","ETHUSDT","SOLUSDT",...topCoins])].slice(0,12);
     await Promise.allSettled(coins.map(async sym=>{
       try{
@@ -1442,6 +2343,13 @@ function renderMarketComment(){
   lines.push({icon:dom==="long"?"🔴":"🟢",main:(dom==="long"?"Long":"Short")+" tarafta daha fazla para yandı (%"+domPct+")",hint:dom==="long"?"Satış baskısı ağır basıyor.":"Alış baskısı ağır basıyor."});
   if(hotCoins.length>0){const names=hotCoins.slice(0,3).map(c=>c.sym+"("+c.count+"x)").join(", ");lines.push({icon:"⚡",main:"Zincirleme yanma: "+names,hint:"Bu coinlerde kısa sürede çok sayıda likit gerçekleşti."});}
   if(stats.biggestItem){const b2=base(stats.biggestItem.symbol);const side2=stats.biggestItem.side==="SELL"?"long":"short";lines.push({icon:"🐋",main:"En büyük tek yanma: "+b2+" "+fmt(stats.biggest),hint:"Bu seanstaki en büyük tek likit. "+b2+" üzerinde "+side2+" pozisyon zorla kapandı."});}
+  
+  // AI Yorumu ekle
+  const aiAccuracy = AI.memory.accuracy.total > 0 ? (AI.memory.accuracy.correct / AI.memory.accuracy.total * 100).toFixed(1) : 0;
+  if(aiAccuracy > 0) {
+    lines.push({icon:"🧠",main:`AI Doğruluk Oranı: %${aiAccuracy}`,hint:`${AI.memory.accuracy.total} tahminden ${AI.memory.accuracy.correct} doğru.`});
+  }
+  
   el.innerHTML=lines.map(l=>`<div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:7px;padding:8px 10px;background:white;border-radius:var(--r-sm);border-left:3px solid var(--purple);box-shadow:0 1px 4px rgba(168,85,247,.07)"><span style="font-size:1.1rem;flex-shrink:0">${l.icon}</span><div><div style="font-size:.82rem;font-weight:700;color:var(--text);line-height:1.3">${l.main}</div><div style="font-size:.68rem;color:var(--text3);margin-top:2px;line-height:1.4">${l.hint}</div></div></div>`).join("");
 }
 
@@ -1450,7 +2358,7 @@ function updateAnalytics(){
   const anOn=D.pages.analytics.classList.contains("active");
   const mktOn=D.pages.filter.classList.contains("active");
   const octOn=D.pages.octopus.classList.contains("active");
-  if(anOn){renderTopSyms();renderSessStats();updateVolChart();}
+  if(anOn){renderTopSyms();renderSessStats();updateVolChart();renderLearningChart();}
   if(mktOn){renderDensity();renderInsights();}
   if(octOn){renderTentacles();renderMarketComment();fetchFundingRates().then(()=>renderFundingTable());}
   renderActBar();
@@ -1485,6 +2393,40 @@ function updateVolChart(){
   volChart.data.datasets[0].data=volTL.map(b=>b.l);
   volChart.data.datasets[1].data=volTL.map(b=>b.s);
   volChart.update("none");
+}
+
+function renderLearningChart(){
+  const ctx = document.getElementById('learningChart');
+  if(!ctx || AI.memory.accuracy.history.length < 2) return;
+  
+  if(learningChart) {
+    learningChart.destroy();
+  }
+  
+  learningChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: AI.memory.accuracy.history.map(h => new Date(h.time).toLocaleTimeString()),
+      datasets: [{
+        label: 'AI Doğruluk %',
+        data: AI.memory.accuracy.history.map(h => h.accuracy),
+        borderColor: '#a855f7',
+        backgroundColor: 'rgba(168,85,247,.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: { ticks: { color: 'rgba(59,31,94,.4)', font: { size: 9 } }, grid: { color: 'rgba(168,85,247,.07)' } }
+      }
+    }
+  });
 }
 
 function renderActBar(){
@@ -1645,14 +2587,12 @@ function timelineTick(){
     if(volChart){volChart.data.datasets[0].data=volTL.map(b=>b.l);volChart.data.datasets[1].data=volTL.map(b=>b.s);volChart.update("none");}
   }
   if(now-lastActBar>=3000){lastActBar=now;renderActBar();}
-  // Delta tag'ları güncelle — her 5sn'de bir feed'i yenile
   if(D.pages.feed.classList.contains("active")&&!paused&&now%5000<1100)renderFeed();
 }
 </script>
 <script>
 /* ═══════════════════ FILTERS ═══════════════════ */
 function setupFilters(){
-  // Restore saved state
   if(filterState.amt>0){
     const chip=document.querySelector("[data-filter='amount'][data-val='"+filterState.amt+"']");
     if(chip){document.querySelectorAll("[data-filter='amount']").forEach(x=>x.classList.remove("active"));chip.classList.add("active");}
@@ -1733,8 +2673,39 @@ function setupTabs(){
       btn.classList.add("active");
       if(tab==="feed"){unread=0;D.feedBadge.classList.remove("show");renderFeed();}
       if(tab==="analytics"||tab==="filter"||tab==="octopus")updateAnalytics();
+      if(tab==="opps")updateOppsPage();
     });
   });
+  const subTabsEl=document.getElementById("oppSubTabs");
+  if(subTabsEl){
+    subTabsEl.querySelectorAll(".sub-tab").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        subTabsEl.querySelectorAll(".sub-tab").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active");
+        const sub=btn.dataset.sub;
+        ["scanner","whale","srlines","strategy","edu","predictions","signals"].forEach(s=>{
+          const el=document.getElementById("sub-"+s);
+          if(el)el.style.display=s===sub?"":"none";
+        });
+        if(sub==="scanner")runSmartScanner();
+        if(sub==="whale")renderWhalePage();
+        if(sub==="srlines")renderSRPage();
+        if(sub==="edu")renderEduPage();
+        if(sub==="predictions")renderPredictions();
+        if(sub==="signals")renderSignalsPage();
+      });
+    });
+  }
+}
+
+function updateOppsPage(){
+  const activeSub = document.querySelector('.sub-tab.active');
+  if(activeSub){
+    const sub = activeSub.dataset.sub;
+    if(sub === 'scanner') runSmartScanner();
+    if(sub === 'predictions') renderPredictions();
+    if(sub === 'signals') renderSignalsPage();
+  }
 }
 
 /* ═══════════════════ SCROLL ═══════════════════ */
@@ -1746,6 +2717,113 @@ function setupScroll(){
   D.pill.addEventListener("click",()=>{D.feedScroll.scrollTo({top:0,behavior:"smooth"});paused=false;D.pill.classList.remove("visible");});
 }
 
+/* ═══════════════════ NEURAL BACKGROUND ═══════════════════ */
+function initNeuralBackground(){
+  const canvas=document.getElementById('neuralCanvas');
+  if(!canvas)return;
+  
+  const ctx=canvas.getContext('2d');
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+  
+  const nodes=[];
+  const nodeCount=25;
+  
+  for(let i=0;i<nodeCount;i++){
+    nodes.push({
+      x:Math.random()*canvas.width,
+      y:Math.random()*canvas.height,
+      vx:(Math.random()-.5)*.3,
+      vy:(Math.random()-.5)*.3
+    });
+  }
+  
+  function animate(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle='rgba(168,85,247,.08)';
+    ctx.lineWidth=1;
+    
+    nodes.forEach((node,i)=>{
+      node.x+=node.vx;
+      node.y+=node.vy;
+      
+      if(node.x<0||node.x>canvas.width)node.vx*=-1;
+      if(node.y<0||node.y>canvas.height)node.vy*=-1;
+      
+      nodes.slice(i+1).forEach(other=>{
+        const dist=Math.hypot(node.x-other.x,node.y-other.y);
+        if(dist<120){
+          ctx.beginPath();
+          ctx.moveTo(node.x,node.y);
+          ctx.lineTo(other.x,other.y);
+          ctx.stroke();
+        }
+      });
+    });
+    
+    requestAnimationFrame(animate);
+  }
+  
+  animate();
+}
+
+/* ═══════════════════ SIGNALS PAGE ═══════════════════ */
+function renderSignalsPage(){
+  const container = document.getElementById('signalList');
+  const perfContainer = document.getElementById('signalPerformance');
+  if(!container)return;
+  
+  const signals = AI.memory.signals.slice(0, 10);
+  
+  if(signals.length === 0){
+    container.innerHTML = '<div style="color:var(--text3);font-size:.82rem;text-align:center;padding:12px">Henüz sinyal yok...</div>';
+  } else {
+    container.innerHTML = signals.map(s => {
+      const isWin = s.status === 'win';
+      const isLoss = s.status === 'loss';
+      const statusColor = isWin ? 'var(--profit)' : isLoss ? 'var(--loss)' : 'var(--prediction)';
+      const statusText = isWin ? '✅ KAZANÇ' : isLoss ? '❌ ZARAR' : '⏳ AKTİF';
+      
+      return `
+        <div class="signal-card ${s.type.toLowerCase()}" style="margin-top:8px">
+          <div class="signal-header">
+            <div class="signal-coin">${base(s.symbol)}</div>
+            <div class="signal-type ${s.type.toLowerCase()}">${s.type === 'BUY' ? '📈 AL' : '📉 SAT'}</div>
+          </div>
+          <div class="signal-conf">Güven: %${(s.confidence * 100).toFixed(0)} | ${statusText}</div>
+          <div class="signal-time">${new Date(s.timestamp).toLocaleTimeString()}</div>
+        </div>
+      `;
+    }).join('');
+  }
+  
+  if(perfContainer){
+    const perf = AI.memory.signalPerformance;
+    const winRate = perf.total > 0 ? (perf.wins / perf.total * 100).toFixed(1) : 0;
+    perfContainer.innerHTML = `
+      <div class="profit-stats">
+        <div class="profit-stat">
+          <div class="profit-stat-lbl">Toplam Sinyal</div>
+          <div class="profit-stat-val">${perf.total}</div>
+        </div>
+        <div class="profit-stat">
+          <div class="profit-stat-lbl">Kazanç</div>
+          <div class="profit-stat-val" style="color:var(--profit)">${perf.wins}</div>
+        </div>
+        <div class="profit-stat">
+          <div class="profit-stat-lbl">Zarar</div>
+          <div class="profit-stat-val" style="color:var(--loss)">${perf.losses}</div>
+        </div>
+        <div class="profit-stat">
+          <div class="profit-stat-lbl">Başarı Oranı</div>
+          <div class="profit-stat-val" style="color:${winRate >= 60 ? 'var(--profit)' : winRate >= 40 ? 'var(--whale)' : 'var(--loss)'}">%${winRate}</div>
+        </div>
+      </div>
+    `;
+  }
+}
+</script>
+<script>
 /* ═══════════════════ ANALYZE MODAL ═══════════════════ */
 function openAnalyzeModal(symbol,itemIdx){
   const b=base(symbol);
@@ -1762,7 +2840,6 @@ function openAnalyzeModal(symbol,itemIdx){
   let infoHtml="";
   if(item){
     const sig=getSignalComment(item,cascadeInfo);
-    // Delta
     const liveNowM=priceCache.get(symbol);
     let deltaHtmlM='';
     if(liveNowM&&item.price&&item.price>0){
@@ -1787,6 +2864,25 @@ function openAnalyzeModal(symbol,itemIdx){
       </div>
     </div>`;
   }
+  
+  // AI Tahmin ekle
+  const aiPred = AI.getPrediction(symbol);
+  if(aiPred){
+    infoHtml += `<div style="background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(168,85,247,.05));border-radius:12px;padding:10px 12px;margin-bottom:8px;border:2px solid var(--prediction)">
+      <div style="font-size:.75rem;font-weight:700;color:var(--text3);margin-bottom:4px">🧠 AI Tahmini</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:.85rem;font-weight:700">Yön: ${aiPred.direction === 'SELL' ? '📉 AŞAĞI' : aiPred.direction === 'BUY' ? '📈 YUKARI' : '⚖️ KARMA'}</div>
+          <div style="font-size:.7rem;color:var(--text3)">Risk Skoru: ${aiPred.riskScore.toFixed(1)}/10</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:1.1rem;font-weight:800;color:var(--purple)">%${(aiPred.probability*100).toFixed(0)}</div>
+          <div style="font-size:.6rem;color:var(--text3)">güven</div>
+        </div>
+      </div>
+    </div>`;
+  }
+  
   infoHtml+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
     <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:.3px">🔬 Anlık Piyasa Analizi</div>
     <div id="analysisAge" style="font-size:.6rem;color:var(--text3)"></div>
@@ -1896,14 +2992,12 @@ function openAnalyzeModal(symbol,itemIdx){
     });
   }
 
-  // ── AI TAHMİN BUTONU ──
   const aiBtn=document.getElementById("modalAiBtn");
   if(aiBtn){
     aiBtn.addEventListener("click",async()=>{
       const btnTxt=document.getElementById("modalAiBtnTxt");
       const resultEl=document.getElementById("modalAiResult");
       if(!resultEl)return;
-      // Zaten sonuç varsa kapat
       if(resultEl.innerHTML!==""){resultEl.innerHTML="";btnTxt.textContent="Pollinations AI ile Tahmin Al";aiBtn.style.opacity="1";return;}
       btnTxt.textContent="⏳ AI düşünüyor...";
       aiBtn.style.opacity=".7";
@@ -1959,16 +3053,12 @@ async function fetchMarketData(symbol){
 async function getMemoryStats(symbol){
   const mem=await loadMemory();const key=base(symbol);
   if(!mem[key])return null;
-
-  // records yoksa veya boşsa bile lag verisi olabilir — onu da döndür
   const recs = mem[key].records || [];
   const hasRecords = recs.length > 0;
   const lagLong  = getLagStats(symbol, "SELL");
   const lagShort = getLagStats(symbol, "BUY");
   const hasLag   = lagLong || lagShort;
-
   if (!hasRecords && !hasLag) return null;
-
   const longRecs  = recs.filter(r=>r.side==="SELL");
   const shortRecs = recs.filter(r=>r.side==="BUY");
 
@@ -1992,83 +3082,9 @@ async function getMemoryStats(symbol){
     lag:{long:lagLong,short:lagShort}
   };
 }
-
-function analyzeMarketData(symbol,marketData,item,cascadeInfo,memStats){
-  const{depth,klines,funding,oi}=marketData;
-  const isL=item?item.side==="SELL":null;
-  const results=[];
-  if(klines&&klines.length>=10){
-    const last10=klines.slice(-10);
-    const closes=last10.map(k=>parseFloat(k[4]));const opens=last10.map(k=>parseFloat(k[1]));
-    const upCount=closes.filter((c,i)=>c>opens[i]).length;const downCount=10-upCount;
-    const priceDelta=((closes[9]-closes[0])/closes[0]*100).toFixed(2);
-    const trend=upCount>=7?"yukarı":downCount>=7?"aşağı":"yatay";
-    const trendIcon=trend==="yukarı"?"📈":trend==="aşağı"?"📉":"➡️";
-    const trendColor=trend==="yukarı"?"var(--short)":trend==="aşağı"?"var(--long)":"var(--text3)";
-    let uyum="";
-    if(isL!==null){if(isL&&trend==="aşağı")uyum=" — Likit yönü uyumlu";else if(!isL&&trend==="yukarı")uyum=" — Likit yönü uyumlu";else uyum=" — Dikkat: Ters yön";}
-    results.push({icon:trendIcon,title:"Momentum",main:`Son 10 mumda ${priceDelta}% değişim, trend ${trend}`,hint:`${upCount} yeşil, ${downCount} kırmızı mum${uyum}`,color:trendColor});
-  }
-  if(depth&&depth.bids&&depth.asks){
-    const bids=depth.bids.map(b=>({price:parseFloat(b[0]),qty:parseFloat(b[1])}));
-    const asks=depth.asks.map(a=>({price:parseFloat(a[0]),qty:parseFloat(a[1])}));
-    const currentPrice=klines?parseFloat(klines[klines.length-1][4]):0;
-    const validBids=bids.filter(b=>!currentPrice||b.price<=currentPrice*1.01);
-    const validAsks=asks.filter(a=>!currentPrice||a.price>=currentPrice*0.99);
-    if(validBids.length>0&&validAsks.length>0){
-      const bigBid=validBids.reduce((max,b)=>b.qty>max.qty?b:max,validBids[0]);
-      const bigAsk=validAsks.reduce((max,a)=>a.qty>max.qty?a:max,validAsks[0]);
-      const totalBid=validBids.reduce((s,b)=>s+b.qty*b.price,0);
-      const totalAsk=validAsks.reduce((s,a)=>s+a.qty*a.price,0);
-      const bidDom=totalBid>totalAsk;
-      results.push({icon:"🧱",title:"Order Book",main:`${bidDom?"Alış":"Satış"} baskısı ağır basıyor`,hint:`En büyük alış: ${fmtPrice(bigBid.price)} | En büyük satış: ${fmtPrice(bigAsk.price)}`,color:bidDom?"var(--short)":"var(--long)"});
-    }
-  }
-  if(funding&&funding.length>0){
-    const rate=parseFloat(funding[0].fundingRate)*100;
-    const rateStr=(rate>=0?"+":"")+rate.toFixed(4)+"%";
-    let main,hint,fColor;
-    if(rate>0.05){main=`Funding pozitif (${rateStr}) — long ağır`;hint="Çok fazla long var. Long squeeze riski yüksek.";fColor="var(--long)";}
-    else if(rate<-0.05){main=`Funding negatif (${rateStr}) — short ağır`;hint="Çok fazla short var. Short squeeze riski yüksek.";fColor="var(--short)";}
-    else{main=`Funding dengeli (${rateStr})`;hint="Net bir baskı yok.";fColor="var(--text3)";}
-    results.push({icon:"💸",title:"Funding Rate",main,hint,color:fColor});
-  }
-  if(oi){
-    const oiVal=parseFloat(oi.openInterest);
-    const lastPrice=klines?parseFloat(klines[klines.length-1][4]):0;
-    const oiUSD=oiVal*lastPrice;
-    results.push({icon:"📊",title:"Açık Pozisyon",main:`Toplam: ${fmt(oiUSD)}`,hint:"Yüksek OI = büyük hareket olursa daha fazla likit.",color:"var(--purple)"});
-  }
-  if(cascadeInfo&&cascadeInfo.count>=2){
-    const arr=cascadeMap.get(symbol)||[];const fresh=arr.filter(x=>x.time>Date.now()-60000);
-    if(fresh.length>=2){
-      const times=fresh.map(x=>x.time).sort((a,b)=>a-b);
-      const gaps=[];for(let i=1;i<times.length;i++)gaps.push(times[i]-times[i-1]);
-      const avgGap=gaps.reduce((s,g)=>s+g,0)/gaps.length/1000;
-      const lastGap=gaps[gaps.length-1]/1000;
-      const hizlaniyor=lastGap<avgGap*0.7;
-      results.push({icon:"⚡",title:"Cascade",main:hizlaniyor?"⚡ Likidasyonlar HIZLANIYOR":"Son "+fresh.length+" likit "+avgGap.toFixed(0)+"sn aralıkla",hint:hizlaniyor?`Son: ${lastGap.toFixed(0)}sn (ort. ${avgGap.toFixed(0)}sn'den hızlı)`:`${fresh.length} likit tespit edildi.`,color:"var(--long)"});
-    }
-  }
-  if(memStats){
-    const side=isL?memStats.long:memStats.short;
-    if(side&&side.d30s&&side.d30s.n>=3){
-      const up=side.d30s.up;const avg=side.d30s.avg;const sign=avg>=0?"+":"";
-      let main,hint,scoreColor;
-      if(up>=65){main=`Geçmişte %${up} geri dönüş`;hint=`${side.d30s.n} ölçümde 30sn sonra ort. ${sign}${avg.toFixed(2)}%`;scoreColor="var(--short)";}
-      else if(up<=35){main=`Geçmişte %${100-up} devam etmiş`;hint=`${side.d30s.n} ölçümde trend devam ediyor.`;scoreColor="var(--long)";}
-      else{main=`Geçmiş karışık (%${up} geri dönüş)`;hint="Net pattern yok.";scoreColor="var(--text3)";}
-      results.push({icon:"🧠",title:"Hafıza Skoru",main,hint,color:scoreColor});
-    }
-  }
-  const lagSt=getLagStats(symbol,isL!==null?(isL?"SELL":"BUY"):"SELL");
-  if(lagSt&&lagSt.n>=3){
-    const dt=isL?"dip":"tepe";const yon=isL?"yukarı":"aşağı";
-    results.push({icon:"⏱️",title:"Lag Analizi",main:`Ort. ${lagSt.avgLag}sn'de ${dt}`,hint:`${lagSt.n} ölçüm: ${dt} sonrası %${lagSt.avgRecovery} ${yon} toparlanma`,color:isL?"var(--short)":"var(--long)",extra:`💡 ~${lagSt.avgLag}sn içinde ${dt} bekleniyor`});
-  }
-  return results;
-}
-
+</script>
+<script>
+/* ═══════════════════ MARKET DATA ANALYSIS ═══════════════════ */
 function analyzeMarketData(symbol, marketData, item, cascadeInfo, memStats) {
   const { depth, klines, funding, oi } = marketData;
   const isL = item ? item.side === "SELL" : null;
@@ -2325,13 +3341,12 @@ function calcSqueezeScore(symbol, funding, oi) {
   return { score: Math.min(100, Math.round(score)), breakdown: parts.join(" | "), direction };
 }
 
-/* ── HAFIZA KAYDI (addMemoryRecord) ── */
+/* ── HAFIZA KAYDI ── */
 const MEMORY_DAYS = 7;
 const MEMORY_MAX  = 100;
 async function addMemoryRecord(symbol, side, val, deltas) {
   const mem = await loadMemory();
   const key = base(symbol);
-  // Tüm alt yapıyı garantile
   if (!mem[key]) mem[key] = { records: [], lagProfiles: { SELL: [], BUY: [] }, impactProfiles: { SELL: [], BUY: [] } };
   if (!mem[key].records) mem[key].records = [];
   if (!mem[key].lagProfiles) mem[key].lagProfiles = { SELL: [], BUY: [] };
@@ -2348,10 +3363,8 @@ async function addMemoryRecord(symbol, side, val, deltas) {
   saveMemoryCoin(key, mem[key]);
 }
 
-// Likit sonrası 30sn/1dk/3dk/5dk fiyat değişimlerini SIRAYLA kaydet
 function scheduleMemoryRecord(symbol, side, val, entryPrice) {
   if (!entryPrice || entryPrice <= 0 || val < 1000) return;
-  // Her checkpoint'i sırayla bekle, deltas'ı biriktir
   const checkpoints = [
     { key: "d30s", ms: 30000 },
     { key: "d1m",  ms: 60000 },
@@ -2365,7 +3378,6 @@ function scheduleMemoryRecord(symbol, side, val, entryPrice) {
       if (p && p > 0) {
         deltas[cp.key] = parseFloat(((p - entryPrice) / entryPrice * 100).toFixed(4));
       }
-      // d5m'de tüm deltas toplanmış olur — Firebase'e yaz
       if (cp.key === "d5m") {
         addMemoryRecord(symbol, side, val, { ...deltas });
       }
@@ -2428,6 +3440,15 @@ function setupSettings(){
   apTog(D.togNotif,D.ntfIcon,cfg.desktop,"🔔","🔕");
   apTog(D.togWhale,D.whlIcon,cfg.whale,"🐋","🐟");
   apTog(D.togInk,D.inkIcon,cfg.ink,"🎨","⬜");
+  
+  // AI Auto toggle
+  const togAiAuto = document.getElementById('togAiAuto');
+  const aiAutoIcon = document.getElementById('aiAutoIcon');
+  if(togAiAuto && aiAutoIcon) {
+    apTog(togAiAuto, aiAutoIcon, cfg.aiAuto, "🤖", "⚪");
+    togAiAuto.addEventListener("click",()=>{cfg.aiAuto=!cfg.aiAuto;apTog(togAiAuto,aiAutoIcon,cfg.aiAuto,"🤖","⚪");saveCfg();});
+  }
+  
   D.alertThr.value=cfg.alertThr;D.whaleSz.value=cfg.whaleSz;
   const vol=cfg.volume??0.5;
   if(D.volSlider){D.volSlider.value=vol;D.volPct.textContent=Math.round(vol*100)+"%";}
@@ -2484,13 +3505,11 @@ async function askPollinationsAI(symbol, item, cascadeInfo) {
 
   const domSide = stats.longVol > stats.shortVol ? "long" : "short";
 
-  // Yön analizi
   const dirPat = analyzeDirectionPattern(symbol, 300000);
   const dirTxt = dirPat && dirPat.total >= 3
     ? `Yön: %${dirPat.domPct} ${dirPat.dom} baskısı (${dirPat.total} likit)${dirPat.hizlaniyor ? " ⚡hızlanıyor" : ""}`
     : "yok";
 
-  // Sıkışma skoru — funding/oi zaten çekilmişse kullan
   const sqzTxt = (() => {
     const fr = fundingCache.get(symbol) ?? fundingCache.get(base(symbol) + "USDT");
     if (fr == null) return "yok";
@@ -2498,7 +3517,6 @@ async function askPollinationsAI(symbol, item, cascadeInfo) {
     return `${sc}/100 (funding ${(fr*100).toFixed(4)}%)`;
   })();
 
-  // Kısa ve öz sistem + kullanıcı mesajı
   const systemMsg = "Sen kripto futures kısa vadeli trader analistisin. Verilen verilere göre 5-15 dakikalık AL/SAT/BEKLE kararı ver. Sadece şu formatı kullan:\nKARAR: [AL veya SAT veya BEKLE]\nGÜVEN: [YÜKSEK veya ORTA veya DÜŞÜK]\nGEREKÇE: [2-3 cümle Türkçe]\nRİSK: [1 cümle]";
 
   const userMsg =
@@ -2508,8 +3526,6 @@ async function askPollinationsAI(symbol, item, cascadeInfo) {
     `Toplam yanan: ${fmt(stats.vol)} | Lag: ${lagTxt}\n` +
     `Yön analizi: ${dirTxt} | Sıkışma: ${sqzTxt}`;
 
-  // GET endpoint — CORS açık, system param destekli
-  // Prompt + system ayrı tutularak URL kısa kalıyor
   const url = "https://text.pollinations.ai/" +
     encodeURIComponent(userMsg) +
     "?model=openai&seed=" + Math.floor(Math.random() * 99999) +
@@ -2522,7 +3538,6 @@ async function askPollinationsAI(symbol, item, cascadeInfo) {
   return parseAIResponse(text.trim(), b, livePrice);
 }
 
-// Retry wrapper — 429/5xx için exponential backoff
 async function fetchWithRetry(url, options = {}, maxRetries = 3) {
   let lastErr;
   for (let i = 0; i < maxRetries; i++) {
@@ -2553,7 +3568,6 @@ function parseAIResponse(text, coin, price) {
     else if (line.startsWith("RİSK:") || line.startsWith("RISK:")) risk = line.replace(/RİSK:|RISK:/,"").trim();
   });
 
-  // Fallback: parse'lanamadıysa ham metni göster
   if (!karar) {
     const upper = text.toUpperCase();
     if (upper.includes("AL") && !upper.includes("SAT")) karar = "AL";
@@ -2577,7 +3591,6 @@ function renderAIPrediction(pred, container) {
 
   container.innerHTML = `
     <div style="margin-top:10px;background:white;border-radius:var(--r);border:2.5px solid ${kararColor};overflow:hidden;box-shadow:0 4px 20px rgba(168,85,247,.12)">
-      <!-- Header -->
       <div style="background:${kararBg};padding:12px 14px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:1.8rem">${kararIcon}</span>
@@ -2591,7 +3604,6 @@ function renderAIPrediction(pred, container) {
           <div style="font-size:.88rem;font-weight:700;color:${guvenColor}">${pred.guven}</div>
         </div>` : ""}
       </div>
-      <!-- Body -->
       <div style="padding:12px 14px">
         ${pred.gerekce ? `<div style="font-size:.82rem;font-weight:600;color:var(--text);line-height:1.55;margin-bottom:8px">${pred.gerekce}</div>` : ""}
         ${pred.risk ? `<div style="display:flex;align-items:flex-start;gap:6px;padding:7px 10px;background:rgba(245,158,11,.08);border-radius:var(--r-sm);border-left:3px solid var(--whale)">
@@ -2604,7 +3616,313 @@ function renderAIPrediction(pred, container) {
       </div>
     </div>`;
 }
+</script>
+<script>
+/* ═══════════════════ SMART SCANNER ═══════════════════ */
+function runSmartScanner(){
+  const container = document.getElementById('scannerCards');
+  if(!container) return;
+  
+  const now = Date.now();
+  const opportunities = [];
+  
+  // Cascade fırsatları
+  cascadeMap.forEach((arr, sym) => {
+    const fresh = arr.filter(x => x.time > now - 60000);
+    if(fresh.length >= 3) {
+      const score = Math.min(95, fresh.length * 15);
+      opportunities.push({
+        type: 'cascade',
+        symbol: sym,
+        score,
+        title: `⚡ Cascade: ${base(sym)}`,
+        desc: `${fresh.length}x likit son 60sn'de`,
+        action: fresh[fresh.length-1].side === 'SELL' ? '📉 Short düşün' : '📈 Long düşün'
+      });
+    }
+  });
+  
+  // Funding fırsatları
+  fundingCache.forEach((rate, sym) => {
+    const score = Math.min(100, Math.abs(rate) * 4000);
+    if(score >= 50) {
+      opportunities.push({
+        type: 'funding',
+        symbol: sym,
+        score,
+        title: `💸 Funding: ${base(sym)}`,
+        desc: `Rate: ${(rate*100).toFixed(4)}%`,
+        action: rate > 0 ? '📉 Short squeeze riski' : '📈 Long squeeze riski'
+      });
+    }
+  });
+  
+  // AI sinyalleri
+  AI.memory.signals.filter(s => s.status === 'active').forEach(sig => {
+    opportunities.push({
+      type: 'ai',
+      symbol: sig.symbol,
+      score: sig.confidence * 100,
+      title: `🤖 AI: ${base(sig.symbol)}`,
+      desc: `Güven: %${(sig.confidence*100).toFixed(0)}`,
+      action: sig.type === 'BUY' ? '📈 AL sinyali' : '📉 SAT sinyali'
+    });
+  });
+  
+  opportunities.sort((a, b) => b.score - a.score);
+  
+  if(opportunities.length === 0) {
+    container.innerHTML = '<div class="a-card" style="margin-top:8px"><div style="color:var(--text3);font-size:.82rem;text-align:center;padding:12px">Şu an fırsat yok — sistem tarıyor... 🐙</div></div>';
+    return;
+  }
+  
+  container.innerHTML = opportunities.slice(0, 5).map(opp => `
+    <div class="opp-scanner-card ${opp.score >= 70 ? 'high' : opp.score >= 40 ? 'medium' : 'low'}" style="margin-top:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:.9rem;font-weight:700;color:var(--text)">${opp.title}</div>
+        <div style="font-size:.75rem;font-weight:700;color:var(--purple)">${opp.score.toFixed(0)} puan</div>
+      </div>
+      <div class="opp-conf-bar">
+        <div class="opp-conf-fill" style="width:${opp.score}%;background:${opp.score >= 70 ? 'var(--long)' : opp.score >= 40 ? 'var(--whale)' : 'var(--short)'}"></div>
+      </div>
+      <div class="opp-detail-row">
+        <span class="opp-detail-lbl">Durum:</span>
+        <span>${opp.desc}</span>
+      </div>
+      <div class="opp-detail-row">
+        <span class="opp-detail-lbl">Öneri:</span>
+        <span style="color:${opp.type === 'ai' ? 'var(--purple)' : 'var(--text)'}">${opp.action}</span>
+      </div>
+    </div>
+  `).join('');
+  
+  document.getElementById('scannerAge').textContent = new Date().toLocaleTimeString();
+}
 
+/* ═══════════════════ WHALE PAGE ═══════════════════ */
+function renderWhalePage(){
+  const scoreList = document.getElementById('whaleScoreList');
+  const tlList = document.getElementById('whaleTlList');
+  if(!scoreList || !tlList) return;
+  
+  // Whale activity score
+  const whaleItems = items.filter(i => i.valueUSD >= cfg.whaleSz);
+  const bySymbol = {};
+  whaleItems.forEach(i => {
+    const b = base(i.symbol);
+    if(!bySymbol[b]) bySymbol[b] = { count: 0, total: 0 };
+    bySymbol[b].count++;
+    bySymbol[b].total += i.valueUSD;
+  });
+  
+  const sorted = Object.entries(bySymbol).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
+  
+  scoreList.innerHTML = sorted.map(([sym, data]) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:1.2rem">${coinHTML(sym+'USDT')}</div>
+      <div style="flex:1">
+        <div style="font-size:.85rem;font-weight:700">${sym}</div>
+        <div style="font-size:.65rem;color:var(--text3)">${data.count} balina | ${fmt(data.total)}</div>
+      </div>
+      <div class="whale-score-ring" style="border-color:var(--whale)">
+        <div style="font-size:.9rem;font-weight:700;color:var(--whale)">${data.count}</div>
+        <div style="font-size:.5rem;color:var(--text3)">adet</div>
+      </div>
+    </div>
+  `).join('');
+  
+  // Timeline
+  tlList.innerHTML = whaleItems.slice(0, 10).map(i => `
+    <div class="whale-tl-item">
+      <div class="whale-tl-dot ${i.valueUSD >= cfg.whaleSz * 2 ? 'mega' : i.side === 'SELL' ? 'long' : 'short'}"></div>
+      <div style="flex:1">
+        <div style="font-size:.85rem;font-weight:700">${base(i.symbol)} ${i.side === 'SELL' ? '📉 Long' : '📈 Short'} ${fmt(i.valueUSD)}</div>
+        <div style="font-size:.65rem;color:var(--text3)">${tsStr(i.time)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ═══════════════════ SR PAGE ═══════════════════ */
+function renderSRPage(){
+  const select = document.getElementById('srCoinSelect');
+  if(!select) return;
+  
+  // Populate select
+  const coins = [...new Set(items.slice(0, 50).map(i => base(i.symbol)))].slice(0, 10);
+  select.innerHTML = '<option value="">Coin seç</option>' + coins.map(c => `<option value="${c}USDT">${c}</option>`).join('');
+  
+  select.addEventListener('change', (e) => {
+    const symbol = e.target.value;
+    if(!symbol) return;
+    renderSRChart(symbol);
+  });
+}
+
+function renderSRChart(symbol){
+  const canvas = document.getElementById('srCanvas');
+  const zoneList = document.getElementById('srZoneList');
+  if(!canvas) return;
+  
+  const lpl = calcLPL(symbol, 7200000);
+  if(!lpl) {
+    zoneList.innerHTML = '<div style="color:var(--text3);font-size:.82rem;text-align:center">Yeterli veri yok</div>';
+    return;
+  }
+  
+  // Draw simplified SR chart
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = 280 * dpr;
+  ctx.scale(dpr, dpr);
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw zones
+  const currentPrice = priceCache.get(symbol) || 0;
+  const maxVol = Math.max(...lpl.zones.map(z => z.total));
+  
+  lpl.zones.forEach((z, i) => {
+    const y = 50 + i * 60;
+    const width = (z.total / maxVol) * (canvas.offsetWidth - 100);
+    const color = z.dom === 'long' ? 'rgba(244,63,94,.5)' : 'rgba(16,185,129,.5)';
+    
+    ctx.fillStyle = color;
+    ctx.fillRect(80, y, width, 40);
+    
+    ctx.fillStyle = '#3b1f5e';
+    ctx.font = 'bold 11px Fredoka';
+    ctx.fillText(`${fmtPrice(z.priceMin)} - ${fmtPrice(z.priceMax)}`, 85, y + 25);
+    ctx.fillText(fmt(z.total), width + 85, y + 25);
+  });
+  
+  zoneList.innerHTML = lpl.zones.map((z, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="width:12px;height:12px;border-radius:3px;background:${z.dom === 'long' ? 'var(--long)' : 'var(--short)'}"></div>
+      <div style="flex:1;font-size:.8rem;font-weight:700">${fmtPrice(z.priceMin)} - ${fmtPrice(z.priceMax)}</div>
+      <div style="font-size:.75rem;color:var(--text3)">${fmt(z.total)}</div>
+    </div>
+  `).join('');
+}
+
+/* ═══════════════════ EDU PAGE ═══════════════════ */
+function renderEduPage(){
+  const container = document.getElementById('eduScenarioList');
+  if(!container) return;
+  
+  const scenarios = [
+    {
+      id: 'cascade_trap',
+      title: '⚡ Cascade Tuzağı',
+      desc: 'Art arda likidasyonlar sonrası piyasa nasıl davranır?',
+      icon: '⚡'
+    },
+    {
+      id: 'whale_game',
+      title: '🐋 Balina Oyunu',
+      desc: 'Büyük oyuncuların stop-loss avı stratejileri',
+      icon: '🐋'
+    },
+    {
+      id: 'funding_squeeze',
+      title: '💸 Funding Sıkışması',
+      desc: 'Yüksek funding rate\'li coinlerde squeeze fırsatları',
+      icon: '💸'
+    },
+    {
+      id: 'lpl_bounce',
+      title: '📍 LPL Sekmesi',
+      desc: 'Likidasyon bölgesi yakınında scalp stratejisi',
+      icon: '📍'
+    }
+  ];
+  
+  container.innerHTML = scenarios.map(s => `
+    <div class="edu-step" style="cursor:pointer" onclick="showScenario('${s.id}')">
+      <div class="edu-step-num">${s.icon}</div>
+      <div class="edu-step-title">${s.title}</div>
+      <div class="edu-step-body">${s.desc}</div>
+    </div>
+  `).join('');
+}
+
+function showScenario(id){
+  const container = document.getElementById('eduActiveScenario');
+  const scenarios = {
+    cascade_trap: {
+      title: '⚡ Cascade Tuzağı',
+      content: `
+        <div class="edu-highlight">
+          <strong>📊 Senaryo:</strong> Bir coinde 60 saniye içinde 3+ likidasyon gerçekleşiyor.
+        </div>
+        <div style="font-size:.82rem;line-height:1.6;margin-top:10px">
+          <p><strong>🔍 Tespit:</strong> Cascade sayısı artarken, momentum tükenmeye yaklaşır.</p>
+          <p><strong>⏱️ Zamanlama:</strong> Son likidasyondan 10-30sn sonra pozisyon değerlendir.</p>
+          <p><strong>🎯 Strateji:</strong> Cascade yönünün tersine scalp pozisyon (5-15dk).</p>
+          <p><strong>⚠️ Risk:</strong> Cascade devam ederse zarar durdur. Max %1 risk.</p>
+        </div>
+      `
+    },
+    whale_game: {
+      title: '🐋 Balina Oyunu',
+      content: `
+        <div class="edu-highlight">
+          <strong>📊 Senaryo:</strong> $500K+ tek likidasyon gerçekleşiyor.
+        </div>
+        <div style="font-size:.82rem;line-height:1.6;margin-top:10px">
+          <p><strong>🔍 Tespit:</strong> Büyük likidasyon = büyük oyuncu stop-loss'u tetiklendi.</p>
+          <p><strong>⏱️ Zamanlama:</strong> 30sn-2dk içinde geri dönüş olasılığı yüksek.</p>
+          <p><strong>🎯 Strateji:</strong> Balina yönünün tersine hızlı scalp.</p>
+          <p><strong>💡 İpucu:</strong> Lag analizi ile optimal giriş zamanı belirle.</p>
+        </div>
+      `
+    },
+    funding_squeeze: {
+      title: '💸 Funding Sıkışması',
+      content: `
+        <div class="edu-highlight">
+          <strong>📊 Senaryo:</strong> Funding rate > %0.05 veya < -%0.05
+        </div>
+        <div style="font-size:.82rem;line-height:1.6;margin-top:10px">
+          <p><strong>🔍 Tespit:</strong> Yüksek funding = bir taraf aşırı kalabalık.</p>
+          <p><strong>⏱️ Zamanlama:</strong> Funding ödeme saatine yakın squeeze olasılığı artar.</p>
+          <p><strong>🎯 Strateji:</strong> Yüksek funding ödeyen tarafa karşı pozisyon.</p>
+          <p><strong>⚠️ Risk:</strong> Funding daha da artabilir, kaldıraç düşük tut.</p>
+        </div>
+      `
+    },
+    lpl_bounce: {
+      title: '📍 LPL Sekmesi',
+      content: `
+        <div class="edu-highlight">
+          <strong>📊 Senaryo:</strong> Fiyat likidasyon bölgesine %1 yakın.
+        </div>
+        <div style="font-size:.82rem;line-height:1.6;margin-top:10px">
+          <p><strong>🔍 Tespit:</strong> Geçmişte yoğun likidasyon olan seviyeler.</p>
+          <p><strong>⏱️ Zamanlama:</strong> Bölgeye temas anında veya hafif kırılımda.</p>
+          <p><strong>🎯 Strateji:</strong> Bölgeden sekme veya kırılım onayı ile pozisyon.</p>
+          <p><strong>💡 İpucu:</strong> Hacimli bölge = güçlü destek/direnç.</p>
+        </div>
+      `
+    }
+  };
+  
+  const s = scenarios[id];
+  if(!s) return;
+  
+  container.innerHTML = `
+    <div class="a-card" style="margin-top:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="a-title" style="margin:0">${s.title}</div>
+        <button onclick="document.getElementById('eduActiveScenario').innerHTML=''" style="background:none;border:none;font-size:1.2rem;cursor:pointer">✕</button>
+      </div>
+      ${s.content}
+    </div>
+  `;
+}
+</script>
+<script>
 /* ═══════════════════ INIT ═══════════════════ */
 function init(){
   setupFilters();
@@ -2613,23 +3931,56 @@ function init(){
   setupSettings();
   setupAnalyzeModal();
   initCharts();
+  initNeuralBackground();
   updateStatsUI();
   updateXPUI();
   renderBadges();
   renderActBar();
-  loadMemory(); // preload Firebase memory
+  loadMemory();
+  
+  // Load AI data from Firebase
+  AI.loadFromFirebase();
+  
   connect();
   connectPriceStream();
   bufIv=setInterval(flushBuffer,BUF_MS);
   tlIv=setInterval(timelineTick,TL_BUCKET_MS);
   setInterval(checkLPLProximity,5000);
-  // Octopus dashboard auto-refresh every 15s
+  
+  // Octopus dashboard auto-refresh
   setInterval(()=>{
     if(D.pages.octopus.classList.contains("active")){
       renderTentacles();renderMarketComment();
       fetchFundingRates().then(()=>renderFundingTable());
     }
   },15000);
+  
+  // AI periodic updates
+  setInterval(()=>{
+    updateAIStats();
+    updatePatternViz();
+    
+    // Neural insight
+    if(AI.memory.patterns.length > 0 && Math.random() > 0.7){
+      const lastPattern = AI.memory.patterns[AI.memory.patterns.length - 1];
+      const insight = document.getElementById('neuralInsight');
+      const text = document.getElementById('insightText');
+      if(insight && text){
+        text.textContent = `${lastPattern.symbol}: ${lastPattern.type === 'accumulation' ? 'Birikim' : 'Dağıtım'} patterni (güç: ${lastPattern.strength.toFixed(1)}x)`;
+        insight.style.display = 'block';
+        setTimeout(() => insight.style.display = 'none', 5000);
+      }
+    }
+  },5000);
+  
+  // Scanner auto-refresh
+  setInterval(()=>{
+    const activeSub = document.querySelector('.sub-tab.active');
+    if(activeSub && activeSub.dataset.sub === 'scanner'){
+      runSmartScanner();
+    }
+  },20000);
+  
   window.addEventListener("beforeunload",()=>{clearInterval(bufIv);clearInterval(tlIv);if(ws)ws.close();if(priceWs)priceWs.close();});
   window.addEventListener("resize",()=>{if(volChart)volChart.update();if(donutChart)donutChart.update();});
 }
